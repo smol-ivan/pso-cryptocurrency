@@ -68,7 +68,9 @@ def run_backtest_for_selected(weights_df, assets, out_dir, windows):
             ax.xaxis.set_major_locator(locator)
             ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
             plt.gcf().autofmt_xdate()
-            fname = out_dir / f"bt_target_{target}_from_{start}_to_{end}.png"
+            bt_dir = out_dir / "bt_targets"
+            bt_dir.mkdir(parents=True, exist_ok=True)
+            fname = bt_dir / f"bt_target_{target}_from_{start}_to_{end}.png"
             plt.savefig(fname, bbox_inches="tight")
             plt.close()
 
@@ -294,8 +296,8 @@ def monthly_snapshots(weights_df, assets, out_dir, indices, start="2024-01-01", 
 
         labels[f"idx_{idx}"] = f"idx={idx} target={annual_target*100:.2f}%"
 
-    # Save CSV
-    csv_path = out_dir / "selected_portfolios_monthly.csv"
+    # Save CSV (include freq in filename)
+    csv_path = out_dir / f"selected_portfolios_{freq}.csv"
     df_res.to_csv(csv_path, index_label="date")
 
     # Plot
@@ -318,7 +320,7 @@ def monthly_snapshots(weights_df, assets, out_dir, indices, start="2024-01-01", 
     # move legend outside to avoid overlap
     plt.legend(loc="center left", bbox_to_anchor=(1, 0.5))
     plt.grid(True)
-    png_path = out_dir / f"selected_portfolios_monthly_{start}_to_{end}.png"
+    png_path = out_dir / f"selected_portfolios_{freq}_{start}_to_{end}.png"
     plt.savefig(png_path, bbox_inches="tight")
     plt.close()
 
