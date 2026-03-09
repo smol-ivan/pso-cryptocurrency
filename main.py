@@ -76,20 +76,21 @@ def main():
     print(f"CVaR (95%): {portfolio_risk * 100:.2f}%")
     print(f"Suma de pesos: {best_position.sum():.4f}")
 
-    save_result_csv(
-        args.mode,
-        args.target_value,
-        portfolio_risk,
-        portfolio_mean,
-    )
+    if args.save_result:
+        # Set last weights on the utils function so it can write the companion CSV
+        try:
+            from utils import save_result_csv as _save
 
-    # Save last weights for companion CSV (utils.save_result_csv reads this)
-    try:
-        from utils import save_result_csv as _save
+            setattr(_save, "_last_weights", best_position.tolist())
+        except Exception:
+            pass
 
-        setattr(_save, "_last_weights", best_position.tolist())
-    except Exception:
-        pass
+        save_result_csv(
+            args.mode,
+            args.target_value,
+            portfolio_risk,
+            portfolio_mean,
+        )
 
 
 if __name__ == "__main__":
