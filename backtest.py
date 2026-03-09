@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 
 
 def load_weights(weights_csv):
@@ -56,14 +57,19 @@ def run_backtest_for_selected(weights_df, assets, out_dir, windows):
             stats.update({"target": target, "window_start": start, "window_end": end})
             results.append(stats)
 
-            # save plot
+            # save plot (format dates on x-axis)
             plt.figure()
-            plt.plot(cum)
+            plt.plot(cum.index, cum.values)
             plt.title(f"Target={target} {start} to {end}")
-            plt.xlabel("Days")
+            plt.xlabel("Date")
             plt.ylabel("Cumulative Return")
+            ax = plt.gca()
+            locator = mdates.AutoDateLocator()
+            ax.xaxis.set_major_locator(locator)
+            ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
+            plt.gcf().autofmt_xdate()
             fname = out_dir / f"bt_target_{target}_from_{start}_to_{end}.png"
-            plt.savefig(fname)
+            plt.savefig(fname, bbox_inches="tight")
             plt.close()
 
     df = pd.DataFrame(results)
@@ -107,8 +113,13 @@ def plot_comparison_for_indices(weights_df, assets, out_dir, windows, indices):
             plt.plot(cum.index, cum.values, label=label)
 
         plt.title(f"Comparison of selected portfolios {start} to {end}")
-        plt.xlabel("Days")
+        plt.xlabel("Date")
         plt.ylabel("Cumulative Return")
+        ax = plt.gca()
+        locator = mdates.AutoDateLocator()
+        ax.xaxis.set_major_locator(locator)
+        ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
+        plt.gcf().autofmt_xdate()
         # move legend outside to avoid overlap
         plt.legend(loc="center left", bbox_to_anchor=(1, 0.5))
         fname = out_dir / f"comparison_{start}_to_{end}.png"
@@ -154,6 +165,11 @@ def aggregate_comparison(weights_df, assets, out_dir, indices):
     plt.title(f"Aggregate comparison {overall_start} to {overall_end}")
     plt.xlabel("Date")
     plt.ylabel("Cumulative Return")
+    ax = plt.gca()
+    locator = mdates.AutoDateLocator()
+    ax.xaxis.set_major_locator(locator)
+    ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
+    plt.gcf().autofmt_xdate()
     # move legend outside
     plt.legend(loc="center left", bbox_to_anchor=(1, 0.5))
     fname = out_dir / f"aggregate_comparison_{overall_start}_to_{overall_end}.png"
@@ -291,6 +307,11 @@ def monthly_snapshots(weights_df, assets, out_dir, indices, start="2024-01-01", 
         # plot continuous line (no markers) for higher-resolution appearance
         plt.plot(df_res.index, df_res[col], label=labels.get(col, col))
 
+    ax = plt.gca()
+    locator = mdates.AutoDateLocator()
+    ax.xaxis.set_major_locator(locator)
+    ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
+    plt.gcf().autofmt_xdate()
     plt.title(f"Selected portfolios monthly snapshots {start} to {end}")
     plt.xlabel("Date")
     plt.ylabel("Cumulative Return")
