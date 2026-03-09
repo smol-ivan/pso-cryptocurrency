@@ -1,17 +1,10 @@
 #! /bin/zsh
 
+source "commom.zsh"
 
 if [[ ! -d $VENV_DIR ]]; then
     print "No existe entorno virtual de python"
     print "Creando entorno ..."
-    if (( $+commands[python3] )); then
-        PYTHON+="python3"
-    elif (( $+commands[python] )); then
-        PYTHON+="python"
-    else
-        print "Instala python!"
-        exit 1
-    fi
 
     $PYTHON -m venv $VENV_DIR
 

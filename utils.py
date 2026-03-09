@@ -53,8 +53,34 @@ def save_result_csv(mode, target_value, risk, portfolio_return):
 
     file_exists = filename.exists()
 
+    # Append basic results. We will also support a companion file with weights
     with open(filename, "a") as f:
         if not file_exists:
             f.write("target_value,risk,return\n")
 
         f.write(f"{target_value},{risk},{portfolio_return}\n")
+
+    # Save weights into a separate CSV named after the results file
+    weights_filename = filename.with_suffix("")
+    weights_filename = results_dir / f"{weights_filename.name}_weights.csv"
+
+    # weights should be provided globally by the caller via an attribute on
+    # this module to avoid changing many call sites. If not present, skip.
+    try:
+        weights = getattr(save_result_csv, "_last_weights", None)
+        if weights is None:
+            return
+
+        write_header = not weights_filename.exists()
+
+        with open(weights_filename, "a") as wf:
+            if write_header:
+                # header: target_value, then w0,w1,...
+                header = ["target_value"] + [f"w{i}" for i in range(len(weights))]
+                wf.write(",".join(header) + "\n")
+
+            row = [str(target_value)] + [str(w) for w in weights]
+            wf.write(",".join(row) + "\n")
+    except Exception:
+        # Non-fatal: if something goes wrong saving weights, ignore.
+        return

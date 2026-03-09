@@ -83,6 +83,14 @@ def main():
         portfolio_mean,
     )
 
+    # Save last weights for companion CSV (utils.save_result_csv reads this)
+    try:
+        from utils import save_result_csv as _save
+
+        setattr(_save, "_last_weights", best_position.tolist())
+    except Exception:
+        pass
+
 
 if __name__ == "__main__":
     main()
