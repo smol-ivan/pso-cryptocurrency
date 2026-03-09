@@ -4,11 +4,45 @@
 # Usage: ./gen_frontier.sh <mode>
 # Example: ./gen_frontier.sh minimize_risk
 
+#!/bin/bash
+
+# gen_frontier.sh: Generate efficient frontier and optionally run backtest
+# Usage: ./gen_frontier.sh <mode> [--run-backtest] [--clean]
+#   mode: minimize_risk | maximize_return
+#   --run-backtest: after generating frontier, run backtest pipeline
+#   --clean: remove results/ and graficas/ (then exit)
+
 MODE=$1
+shift || true
+
+RUN_BACKTEST=false
+CLEAN=false
+
+for arg in "$@"; do
+    case "$arg" in
+        --run-backtest)
+            RUN_BACKTEST=true
+            ;;
+        --clean)
+            CLEAN=true
+            ;;
+        *)
+            echo "Unknown option: $arg"
+            exit 1
+            ;;
+    esac
+done
+
+if [ "$CLEAN" = true ]; then
+    echo "Cleaning results/ and graficas/"
+    rm -rf results/ graficas/
+    echo "Clean complete"
+    exit 0
+fi
 
 if [ -z "$MODE" ]; then
-    echo "Usage: $0 <mode>"
-    echo "Example: $0 minimize_risk"
+    echo "Usage: $0 <mode> [--run-backtest] [--clean]"
+    echo "Example: $0 minimize_risk --run-backtest"
     exit 1
 fi
 
@@ -16,6 +50,13 @@ fi
 if [ "$MODE" != "minimize_risk" ] && [ "$MODE" != "maximize_return" ]; then
     echo "Error: mode must be 'minimize_risk' or 'maximize_return'"
     exit 1
+fi
+
+# Ensure we use the virtualenv python if available
+if [ -d ".venv/bin" ]; then
+    PYBIN="$(pwd)/.venv/bin/python"
+else
+    PYBIN="python3"
 fi
 
 # PSO parameters
@@ -29,11 +70,10 @@ echo "Generating frontier for mode=$MODE (crypto CVaR version)"
 
 # Get limits
 if [ "$MODE" = "minimize_risk" ]; then
-    # LIMITS=$(python3 main.py --limits_return 2>/dev/null | grep -E "L_INF|L_SUP")
-    LIMITS=$(python3 main.py --limits_return 2>/dev/null | grep -E "L_INF|L_SUP")
+    LIMITS=$($PYBIN main.py --limits_return 2>/dev/null | grep -E "L_INF|L_SUP")
     TARGET_TYPE="return"
 else
-    LIMITS=$(python3 main.py --limits_risk 2>/dev/null | grep -E "L_INF|L_SUP")
+    LIMITS=$($PYBIN main.py --limits_risk 2>/dev/null | grep -E "L_INF|L_SUP")
     TARGET_TYPE="risk"
 fi
 
@@ -48,8 +88,7 @@ fi
 
 echo "Target $TARGET_TYPE limits: $L_INF to $L_SUP"
 
-STEP=$(
-    python3 - <<EOF
+STEP=$($PYBIN - <<EOF
 L_INF = float("$L_INF")
 L_SUP = float("$L_SUP")
 NUM_POINTS = $NUM_POINTS
@@ -70,11 +109,8 @@ fi
 
 echo "Running $NUM_POINTS PSO optimizations..."
 
-CURRENT=$L_INF
-COUNT=1
 for ((i = 0; i < NUM_POINTS; i++)); do
-    CURRENT=$(
-        python3 - <<EOF
+    CURRENT=$($PYBIN - <<EOF
 L_INF = float("$L_INF")
 STEP = float("$STEP")
 i = $i
@@ -84,7 +120,7 @@ EOF
 
     echo "  [$((i + 1))/$NUM_POINTS] Target=$CURRENT"
 
-    python3 main.py \
+    $PYBIN main.py \
         --mode "$MODE" \
         --target_value "$CURRENT" \
         --n_swarm $N_SWARM \
@@ -95,3 +131,17 @@ EOF
 done
 
 echo "Done! Results saved to $FILENAME"
+
+if [ "$RUN_BACKTEST" = true ]; then
+    echo "Running backtest pipeline..."
+    if [ "$MODE" = "minimize_risk" ]; then
+        WEIGHTS_CSV="results/min_return_crypto_weights.csv"
+    else
+        WEIGHTS_CSV="results/max_risk_crypto_weights.csv"
+    fi
+
+    $PYBIN backtest.py --weights-csv "$WEIGHTS_CSV" --assets BTC-USD ETH-USD SOL-USD ADA-USD --out results/backtest
+    echo "Backtest complete. Outputs in results/backtest/"
+fi
+
+echo "All done."
