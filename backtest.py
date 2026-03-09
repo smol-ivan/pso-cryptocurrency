@@ -109,7 +109,8 @@ def plot_comparison_for_indices(weights_df, assets, out_dir, windows, indices):
         plt.title(f"Comparison of selected portfolios {start} to {end}")
         plt.xlabel("Days")
         plt.ylabel("Cumulative Return")
-        plt.legend()
+        # move legend outside to avoid overlap
+        plt.legend(loc="center left", bbox_to_anchor=(1, 0.5))
         fname = out_dir / f"comparison_{start}_to_{end}.png"
         plt.savefig(fname, bbox_inches="tight")
         plt.close()
@@ -153,7 +154,8 @@ def aggregate_comparison(weights_df, assets, out_dir, indices):
     plt.title(f"Aggregate comparison {overall_start} to {overall_end}")
     plt.xlabel("Date")
     plt.ylabel("Cumulative Return")
-    plt.legend()
+    # move legend outside
+    plt.legend(loc="center left", bbox_to_anchor=(1, 0.5))
     fname = out_dir / f"aggregate_comparison_{overall_start}_to_{overall_end}.png"
     plt.savefig(fname, bbox_inches="tight")
     plt.close()
@@ -220,7 +222,7 @@ def plot_asset_contributions(weights_df, assets, out_dir, indices, start="2024-0
     return df_sum, csv_path
 
 
-def monthly_snapshots(weights_df, assets, out_dir, indices, start="2024-01-01", end="2025-06-30", freq="ME"):
+def monthly_snapshots(weights_df, assets, out_dir, indices, start="2024-01-01", end="2025-06-30", freq="W"):
     """
     Compute cumulative return snapshots for selected portfolios at monthly (or quarterly) frequency.
     Saves CSV `selected_portfolios_monthly.csv` and a comparative plot.
@@ -286,12 +288,14 @@ def monthly_snapshots(weights_df, assets, out_dir, indices, start="2024-01-01", 
         col = f"idx_{idx}"
         if col not in df_res:
             continue
-        plt.plot(df_res.index, df_res[col], marker="o", label=labels.get(col, col))
+        # plot continuous line (no markers) for higher-resolution appearance
+        plt.plot(df_res.index, df_res[col], label=labels.get(col, col))
 
     plt.title(f"Selected portfolios monthly snapshots {start} to {end}")
     plt.xlabel("Date")
     plt.ylabel("Cumulative Return")
-    plt.legend()
+    # move legend outside to avoid overlap
+    plt.legend(loc="center left", bbox_to_anchor=(1, 0.5))
     plt.grid(True)
     png_path = out_dir / f"selected_portfolios_monthly_{start}_to_{end}.png"
     plt.savefig(png_path, bbox_inches="tight")
