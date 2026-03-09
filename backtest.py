@@ -18,20 +18,22 @@ def backtest_portfolio(weights, assets, start, end):
     data = yf.download(assets, start=start, end=end, progress=False)["Close"]
     prices = data.ffill().dropna()
 
-    # compute daily returns
-    returns = prices.pct_change().dropna()
+    # compute daily log-returns
+    returns = np.log(prices / prices.shift(1)).dropna()
 
+    # portfolio daily log-returns (T,)
     port_returns = returns.values @ np.array(weights)
 
-    # cumulative return series
-    cum = (1 + port_returns).cumprod() - 1
+    # cumulative simple return series from log-returns
+    cum_values = np.exp(np.cumsum(port_returns)) - 1
+    cum = pd.Series(cum_values, index=returns.index)
 
     stats = {
         "start": start,
         "end": end,
-        "cum_return": float(cum[-1]),
-        "mean_daily_return": float(port_returns.mean()),
-        "std_daily_return": float(port_returns.std()),
+        "cum_return": float(cum.iloc[-1]) if len(cum) > 0 else 0.0,
+        "mean_daily_return": float(port_returns.mean()) if len(port_returns) > 0 else 0.0,  # mean log-return
+        "std_daily_return": float(port_returns.std()) if len(port_returns) > 0 else 0.0,  # std of log-returns
     }
 
     return cum, stats
@@ -86,22 +88,23 @@ def plot_comparison_for_indices(weights_df, assets, out_dir, windows, indices):
 
             data = yf.download(assets, start=start, end=end, progress=False)["Close"]
             prices = data.ffill().dropna()
-            returns = prices.pct_change().dropna()
-            port_returns = returns.values @ np.array(weights)
-            cum = (1 + port_returns).cumprod() - 1
 
-            # annualize target (assume daily)
-            # target in weights CSV is a daily mean log-return (from training data).
-            # Annualize correctly for log-returns: exp(target*252)-1
+            # use log-returns consistent with training
+            returns = np.log(prices / prices.shift(1)).dropna()
+            port_returns = returns.values @ np.array(weights)
+            cum_values = np.exp(np.cumsum(port_returns)) - 1
+            cum = pd.Series(cum_values, index=returns.index)
+
+            # annualize target (assume daily log-return)
             try:
                 annual_target = np.exp(float(target) * 252) - 1
             except Exception:
                 annual_target = float(target) * 252
 
             # compute final cumulative return to show actual performance
-            final_ret = float(cum[-1])
+            final_ret = float(cum.iloc[-1]) if len(cum) > 0 else 0.0
             label = f"idx={idx} final={final_ret*100:.2f}% target_ann={annual_target*100:.1f}%"
-            plt.plot(cum, label=label)
+            plt.plot(cum.index, cum.values, label=label)
 
         plt.title(f"Comparison of selected portfolios {start} to {end}")
         plt.xlabel("Days")
@@ -125,8 +128,8 @@ def aggregate_comparison(weights_df, assets, out_dir, indices):
 
     data = yf.download(assets, start=overall_start, end=overall_end, progress=False)["Close"]
     prices = data.ffill().dropna()
-    returns = prices.pct_change().dropna()
-
+    # use log-returns
+    returns = np.log(prices / prices.shift(1)).dropna()
     for idx in indices:
         if idx < 0 or idx >= len(weights_df):
             continue
@@ -136,15 +139,16 @@ def aggregate_comparison(weights_df, assets, out_dir, indices):
         weights = row.drop(labels=["target_value"]).values.astype(float)
 
         port_returns = returns.values @ np.array(weights)
-        cum = (1 + port_returns).cumprod() - 1
+        cum_values = np.exp(np.cumsum(port_returns)) - 1
+        cum = pd.Series(cum_values, index=returns.index)
 
         try:
-            annual_target = (1 + target) ** 252 - 1
+            annual_target = np.exp(float(target) * 252) - 1
         except Exception:
-            annual_target = target * 252
+            annual_target = float(target) * 252
 
         label = f"idx={idx} target={annual_target*100:.2f}%"
-        plt.plot(prices.index[1:], cum, label=label)
+        plt.plot(cum.index, cum.values, label=label)
 
     plt.title(f"Aggregate comparison {overall_start} to {overall_end}")
     plt.xlabel("Date")
@@ -190,11 +194,11 @@ def plot_asset_contributions(weights_df, assets, out_dir, indices, start="2024-0
         plt.savefig(fname, bbox_inches="tight")
         plt.close()
 
-        # summary stats
+        # summary stats (use log-returns for consistency)
         total_return = float(portfolio_value.iloc[-1] - 1)
         num_days = len(portfolio_value.index)
         ann_return = (1 + total_return) ** (252 / num_days) - 1 if num_days > 0 else 0.0
-        daily_rets = portfolio_value.pct_change().dropna()
+        daily_rets = np.log(portfolio_value / portfolio_value.shift(1)).dropna()
         ann_vol = float(daily_rets.std() * (252 ** 0.5)) if len(daily_rets) > 0 else 0.0
 
         final_asset_vals = asset_values.iloc[-1]
@@ -227,7 +231,8 @@ def monthly_snapshots(weights_df, assets, out_dir, indices, start="2024-01-01", 
     # Download full price series
     data = yf.download(assets, start=start, end=end, progress=False)["Close"]
     prices = data.ffill().dropna()
-    returns = prices.pct_change().dropna()
+    # use log-returns for portfolio construction
+    returns = np.log(prices / prices.shift(1)).dropna()
 
     # Build snapshots (month ends)
     rng = pd.date_range(start=start, end=end, freq=freq)
@@ -246,27 +251,28 @@ def monthly_snapshots(weights_df, assets, out_dir, indices, start="2024-01-01", 
         target = float(row["target_value"]) if "target_value" in row.index else float(row.iloc[0])
         weights = row.drop(labels=["target_value"]).values.astype(float)
 
-        # portfolio daily cumulative returns
+        # portfolio daily log-returns and cumulative simple returns
         port_returns = returns.values @ np.array(weights)
-        cum = (1 + port_returns).cumprod() - 1
-        cum_index = returns.index
+        cum_values = np.exp(np.cumsum(port_returns)) - 1
+        cum = pd.Series(cum_values, index=returns.index)
+        cum_index = cum.index
 
         for date in rng:
             # find first available date >= snapshot date
             sel = cum_index.searchsorted(date)
             if sel >= len(cum):
                 # use last available
-                val = float(cum[-1])
+                val = float(cum.iloc[-1]) if len(cum) > 0 else 0.0
             else:
-                val = float(cum[sel])
+                val = float(cum.iloc[sel])
 
             df_res.iloc[df_res.index.get_loc(date), pos] = val
 
         # annualize target (daily to yearly)
         try:
-            annual_target = (1 + target) ** 252 - 1
+            annual_target = np.exp(float(target) * 252) - 1
         except Exception:
-            annual_target = target * 252
+            annual_target = float(target) * 252
 
         labels[f"idx_{idx}"] = f"idx={idx} target={annual_target*100:.2f}%"
 
