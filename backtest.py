@@ -367,7 +367,7 @@ def main():
 
     # Generate monthly snapshots and plot for selected portfolios
     monthly_csv, monthly_png = monthly_snapshots(
-        df_weights, args.assets, args.out, selected_indices, start="2024-01-01", end="2025-06-30", freq="ME"
+        df_weights, args.assets, args.out, selected_indices, start="2024-01-01", end="2025-06-30", freq="W"
     )
 
     # Plot asset contributions for the selected portfolios and produce CSV summary
