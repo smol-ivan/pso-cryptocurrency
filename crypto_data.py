@@ -39,13 +39,14 @@ def load_crypto_returns(
     return mean_return, returns_matrix
 
 
-def simulate_garch_returns(returns_matrix, n_scenarios=5000):
+def simulate_garch_returns(returns_matrix, n_scenarios=5000, random_state=None):
     """
     Ajusta un modelo GARCH(1,1) por activo y simula escenarios de retornos.
 
     Args:
         returns_matrix: matriz historica (T x N)
         n_scenarios: numero de escenarios simulados por activo
+        random_state: semilla para reproducibilidad de la simulación
 
     Returns:
         mean_return: vector (N,)
@@ -55,6 +56,9 @@ def simulate_garch_returns(returns_matrix, n_scenarios=5000):
         raise ImportError(
             "Falta la dependencia 'arch'. Instala con: pip install arch"
         )
+
+    if random_state is not None:
+        np.random.seed(random_state)
 
     n_assets = returns_matrix.shape[1]
     simulated_returns = np.zeros((n_scenarios, n_assets))

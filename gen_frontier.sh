@@ -69,8 +69,12 @@ ITER=200
 C1=1.7
 C2=1.7
 NUM_POINTS=50
+GARCH_SEED=42
 
 echo "Generating frontier for mode=$MODE, returns_source=$RETURNS_SOURCE"
+if [ "$RETURNS_SOURCE" = "garch" ]; then
+    echo "Using fixed garch seed=$GARCH_SEED for reproducible frontier points"
+fi
 
 # Get limits
 if [ "$MODE" = "minimize_risk" ]; then
@@ -129,6 +133,11 @@ EOF
 
     echo "  [$((i + 1))/$NUM_POINTS] Target=$CURRENT"
 
+    EXTRA_ARGS=""
+    if [ "$RETURNS_SOURCE" = "garch" ]; then
+        EXTRA_ARGS="--garch-seed $GARCH_SEED"
+    fi
+
     $PYBIN main.py \
         --mode "$MODE" \
         --returns-source "$RETURNS_SOURCE" \
@@ -137,6 +146,8 @@ EOF
         --iter $ITER \
         --C1 $C1 \
         --C2 $C2 \
+        --n-scenarios 5000 \
+        $EXTRA_ARGS \
         --save-result >/dev/null 2>&1
 done
 

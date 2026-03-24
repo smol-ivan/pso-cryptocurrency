@@ -40,6 +40,12 @@ def main():
         type=int,
         help="Escenarios simulados por activo cuando --returns-source=garch",
     )
+    parser.add_argument(
+        "--garch-seed",
+        type=int,
+        default=None,
+        help="Semilla para hacer reproducible la simulación GARCH",
+    )
 
     args = parser.parse_args()
 
@@ -54,6 +60,7 @@ def main():
         mean_return, returns_matrix = simulate_garch_returns(
             returns_matrix,
             n_scenarios=args.n_scenarios,
+            random_state=args.garch_seed,
         )
 
     if args.limits_return:

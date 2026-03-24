@@ -25,8 +25,11 @@ python main.py \
   --mode minimize_risk \
   --target_value 0.001 \
   --returns-source garch \
-  --n-scenarios 8000
+  --n-scenarios 8000 \
+  --garch-seed 42
 ```
+
+> Recomendación: para comparar fronteras de manera consistente en GARCH, usa una semilla fija (`--garch-seed`) para que todos los puntos se evalúen sobre escenarios reproducibles.
 
 ## Salidas separadas por modo
 
