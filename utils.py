@@ -3,6 +3,17 @@ from pathlib import Path
 import numpy as np
 
 
+def get_output_dirs(returns_source):
+    base_dir = Path("outputs") / returns_source
+    results_dir = base_dir / "results"
+    graphs_dir = base_dir / "graficas"
+
+    results_dir.mkdir(parents=True, exist_ok=True)
+    graphs_dir.mkdir(parents=True, exist_ok=True)
+
+    return results_dir, graphs_dir
+
+
 def get_limits_return_target(mean_return):
     minimum = mean_return.min()
     maximum = mean_return.max()
@@ -38,13 +49,12 @@ def get_limits_risk_target(returns_matrix, alpha=0.95):
     print(f"L_SUP={maximum}")
 
 
-def save_result_csv(mode, target_value, risk, portfolio_return):
+def save_result_csv(mode, target_value, risk, portfolio_return, returns_source):
     """
     Guarda resultados en CSV (ahora sin data_file)
     """
 
-    results_dir = Path("results")
-    results_dir.mkdir(exist_ok=True)
+    results_dir, _ = get_output_dirs(returns_source)
 
     if mode == "minimize_risk":
         filename = results_dir / "min_return_crypto.csv"

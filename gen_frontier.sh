@@ -1,20 +1,26 @@
 #!/bin/bash
 
 # gen_frontier.sh: Generate efficient frontier for crypto CVaR version
-# Usage: ./gen_frontier.sh <mode>
-# Example: ./gen_frontier.sh minimize_risk
+# Usage: ./gen_frontier.sh <mode> [returns_source]
+# Example: ./gen_frontier.sh minimize_risk historical
 
 MODE=$1
+RETURNS_SOURCE=${2:-historical}
 
 if [ -z "$MODE" ]; then
-    echo "Usage: $0 <mode>"
-    echo "Example: $0 minimize_risk"
+    echo "Usage: $0 <mode> [returns_source]"
+    echo "Example: $0 minimize_risk historical"
     exit 1
 fi
 
 # Validate mode
 if [ "$MODE" != "minimize_risk" ] && [ "$MODE" != "maximize_return" ]; then
     echo "Error: mode must be 'minimize_risk' or 'maximize_return'"
+    exit 1
+fi
+
+if [ "$RETURNS_SOURCE" != "historical" ] && [ "$RETURNS_SOURCE" != "garch" ]; then
+    echo "Error: returns_source must be 'historical' or 'garch'"
     exit 1
 fi
 
@@ -25,15 +31,15 @@ C1=1.7
 C2=1.7
 NUM_POINTS=50
 
-echo "Generating frontier for mode=$MODE (crypto CVaR version)"
+echo "Generating frontier for mode=$MODE, returns_source=$RETURNS_SOURCE (crypto CVaR version)"
 
 # Get limits
 if [ "$MODE" = "minimize_risk" ]; then
     # LIMITS=$(python3 main.py --limits_return 2>/dev/null | grep -E "L_INF|L_SUP")
-    LIMITS=$(python3 main.py --limits_return 2>/dev/null | grep -E "L_INF|L_SUP")
+    LIMITS=$(python3 main.py --limits_return --returns-source "$RETURNS_SOURCE" 2>/dev/null | grep -E "L_INF|L_SUP")
     TARGET_TYPE="return"
 else
-    LIMITS=$(python3 main.py --limits_risk 2>/dev/null | grep -E "L_INF|L_SUP")
+    LIMITS=$(python3 main.py --limits_risk --returns-source "$RETURNS_SOURCE" 2>/dev/null | grep -E "L_INF|L_SUP")
     TARGET_TYPE="risk"
 fi
 
@@ -59,10 +65,12 @@ EOF
 
 # Clear previous results
 if [ "$MODE" = "minimize_risk" ]; then
-    FILENAME="results/min_return_crypto.csv"
+    FILENAME="outputs/$RETURNS_SOURCE/results/min_return_crypto.csv"
 else
-    FILENAME="results/max_risk_crypto.csv"
+    FILENAME="outputs/$RETURNS_SOURCE/results/max_risk_crypto.csv"
 fi
+
+mkdir -p "$(dirname "$FILENAME")"
 
 if [ -f "$FILENAME" ]; then
     rm "$FILENAME"
@@ -86,6 +94,7 @@ EOF
 
     python3 main.py \
         --mode "$MODE" \
+        --returns-source "$RETURNS_SOURCE" \
         --target_value "$CURRENT" \
         --n_swarm $N_SWARM \
         --iter $ITER \

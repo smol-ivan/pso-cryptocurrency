@@ -1,3 +1,4 @@
+import argparse
 import os
 import shutil
 from pathlib import Path
@@ -38,6 +39,18 @@ def graph_generator(df_pso, file_name, output_dir):
 # Main
 # ------------------------------------------------------
 def main():
+    parser = argparse.ArgumentParser(
+        prog="graphit",
+        description="Genera gráficas de frontera eficiente desde CSV del PSO",
+    )
+    parser.add_argument(
+        "--returns-source",
+        choices=["historical", "garch"],
+        default="historical",
+        help="Fuente de retornos para ubicar carpeta de resultados",
+    )
+    args = parser.parse_args()
+
     sns.set_theme(style="whitegrid")
 
     plt.rcParams.update(
@@ -51,13 +64,18 @@ def main():
         }
     )
 
-    results_dir = Path("./results/")
-    output_dir = "./graficas"
+    base_dir = Path("outputs") / args.returns_source
+    results_dir = base_dir / "results"
+    output_dir = base_dir / "graficas"
 
-    # Limpiar carpeta de salida
-    if os.path.exists(output_dir):
+    if not results_dir.exists():
+        print(f"No existe carpeta de resultados: {results_dir}")
+        return
+
+    # Limpiar carpeta de salida del modo seleccionado
+    if output_dir.exists():
         shutil.rmtree(output_dir)
-    os.makedirs(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     # Iterar sobre CSV generados por PSO
     for res_file in results_dir.iterdir():
@@ -69,7 +87,7 @@ def main():
         # Ordenar por riesgo para que se vea como frontera
         df_pso = df_pso.sort_values(by="risk")
 
-        graph_generator(df_pso, res_file.stem, output_dir)
+        graph_generator(df_pso, res_file.stem, str(output_dir))
 
     print(f"Gráficas generadas en carpeta: {output_dir}")
 
