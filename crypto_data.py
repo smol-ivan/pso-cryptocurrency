@@ -79,6 +79,16 @@ def simulate_garch_returns(returns_matrix, n_scenarios=5000):
 
         # Simulaciones para t+1 en porcentaje, se vuelve a escala decimal
         scenario_values = forecast.simulations.values[-1, :, 0] / 100.0
+
+        # Guardrail: evitar escenarios extremos inestables del ajuste GARCH
+        # que distorsionan objetivo diario y su anualización en backtest.
+        hist = returns_matrix[:, i]
+        q01, q99 = np.quantile(hist, [0.01, 0.99])
+        band = 3.0 * (q99 - q01)
+        lower = q01 - band
+        upper = q99 + band
+        scenario_values = np.clip(scenario_values, lower, upper)
+
         simulated_returns[:, i] = scenario_values
 
     mean_return = simulated_returns.mean(axis=0)

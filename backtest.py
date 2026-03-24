@@ -14,6 +14,26 @@ def load_weights(weights_csv):
     return df
 
 
+
+
+def format_target_label(target):
+    """
+    Build a robust legend label for target values stored in the weights CSV.
+
+    Targets are daily values from optimization. For typical magnitudes we show
+    annualized target; for unusually large magnitudes we show daily target only
+    to avoid misleading astronomic percentages in legends.
+    """
+    t = float(target)
+    daily_pct = t * 100
+
+    # Typical daily target range in this project is low-single-digit %.
+    if abs(t) <= 0.02:
+        ann = np.exp(t * 252) - 1
+        return f"target_d={daily_pct:.3f}% target_ann={ann*100:.2f}%"
+
+    return f"target_d={daily_pct:.3f}%"
+
 def backtest_portfolio(weights, assets, start, end):
     # weights: list or array of shape (N,)
     data = yf.download(assets, start=start, end=end, progress=False)["Close"]
@@ -103,15 +123,9 @@ def plot_comparison_for_indices(weights_df, assets, out_dir, windows, indices):
             cum_values = np.exp(np.cumsum(port_returns)) - 1
             cum = pd.Series(cum_values, index=returns.index)
 
-            # annualize target (assume daily log-return)
-            try:
-                annual_target = np.exp(float(target) * 252) - 1
-            except Exception:
-                annual_target = float(target) * 252
-
             # compute final cumulative return to show actual performance
             final_ret = float(cum.iloc[-1]) if len(cum) > 0 else 0.0
-            label = f"idx={idx} final={final_ret*100:.2f}% target_ann={annual_target*100:.1f}%"
+            label = f"idx={idx} final={final_ret*100:.2f}% {format_target_label(target)}"
             plt.plot(cum.index, cum.values, label=label)
 
         plt.title(f"Comparison of selected portfolios {start} to {end}")
@@ -156,12 +170,7 @@ def aggregate_comparison(weights_df, assets, out_dir, indices):
         cum_values = np.exp(np.cumsum(port_returns)) - 1
         cum = pd.Series(cum_values, index=returns.index)
 
-        try:
-            annual_target = np.exp(float(target) * 252) - 1
-        except Exception:
-            annual_target = float(target) * 252
-
-        label = f"idx={idx} target={annual_target*100:.2f}%"
+        label = f"idx={idx} {format_target_label(target)}"
         plt.plot(cum.index, cum.values, label=label)
 
     plt.title(f"Aggregate comparison {overall_start} to {overall_end}")
@@ -289,12 +298,7 @@ def monthly_snapshots(weights_df, assets, out_dir, indices, start="2024-01-01", 
             df_res.iloc[df_res.index.get_loc(date), pos] = val
 
         # annualize target (daily to yearly)
-        try:
-            annual_target = np.exp(float(target) * 252) - 1
-        except Exception:
-            annual_target = float(target) * 252
-
-        labels[f"idx_{idx}"] = f"idx={idx} target={annual_target*100:.2f}%"
+        labels[f"idx_{idx}"] = f"idx={idx} {format_target_label(target)}"
 
     # Save CSV (include freq in filename)
     csv_path = out_dir / f"selected_portfolios_{freq}.csv"
