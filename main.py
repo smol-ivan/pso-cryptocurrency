@@ -1,4 +1,5 @@
 import argparse
+import random as pyrandom
 
 import numpy as np
 
@@ -28,6 +29,18 @@ def main():
     parser.add_argument("--limits_return", action="store_true")
     parser.add_argument("--limits_risk", action="store_true")
     parser.add_argument("--save-result", action="store_true")
+    parser.add_argument(
+        "--pso-seed",
+        type=int,
+        default=None,
+        help="Semilla base para reproducibilidad del PSO",
+    )
+    parser.add_argument(
+        "--restarts",
+        type=int,
+        default=1,
+        help="Número de reinicios de PSO por target (se elige la mejor solución)",
+    )
     parser.add_argument(
         "--returns-source",
         choices=["historical", "garch"],
@@ -75,16 +88,29 @@ def main():
         print("Ignorar si se usta --limits_*")
         return
 
-    best_fitness, best_position = pso(
-        mean_return,
-        returns_matrix,
-        args.iter,
-        args.n_swarm,
-        OptimizationMode(args.mode),
-        args.C1,
-        args.C2,
-        args.target_value,
-    )
+    best_fitness = None
+    best_position = None
+
+    for restart in range(max(1, args.restarts)):
+        if args.pso_seed is not None:
+            current_seed = args.pso_seed + restart
+            np.random.seed(current_seed)
+            pyrandom.seed(current_seed)
+
+        fitness, position = pso(
+            mean_return,
+            returns_matrix,
+            args.iter,
+            args.n_swarm,
+            OptimizationMode(args.mode),
+            args.C1,
+            args.C2,
+            args.target_value,
+        )
+
+        if best_fitness is None or fitness < best_fitness:
+            best_fitness = fitness
+            best_position = position
 
     # 🔹 Calcular métricas finales
     portfolio_returns = returns_matrix @ best_position

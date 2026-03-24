@@ -70,8 +70,11 @@ C1=1.7
 C2=1.7
 NUM_POINTS=50
 GARCH_SEED=42
+PSO_SEED=1234
+PSO_RESTARTS=5
 
 echo "Generating frontier for mode=$MODE, returns_source=$RETURNS_SOURCE"
+echo "Using pso seed=$PSO_SEED and restarts=$PSO_RESTARTS"
 if [ "$RETURNS_SOURCE" = "garch" ]; then
     echo "Using fixed garch seed=$GARCH_SEED for reproducible frontier points"
 fi
@@ -147,6 +150,8 @@ EOF
         --C1 $C1 \
         --C2 $C2 \
         --n-scenarios 5000 \
+        --pso-seed $PSO_SEED \
+        --restarts $PSO_RESTARTS \
         $EXTRA_ARGS \
         --save-result >/dev/null 2>&1
 done

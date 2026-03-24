@@ -100,3 +100,14 @@ Ejemplos:
 # Limpiar salidas
 ./gen_frontier.sh minimize_risk --clean
 ```
+
+
+## Reproducibilidad del PSO
+
+Para que la frontera sea menos ruidosa entre targets, puedes fijar semilla y usar reinicios:
+
+```bash
+python main.py --mode minimize_risk --target_value 0.001 --pso-seed 1234 --restarts 5
+```
+
+`gen_frontier.sh` ya envía estos parámetros por defecto para estabilizar la frontera.
