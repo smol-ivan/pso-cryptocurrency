@@ -28,6 +28,18 @@ def main():
     parser.add_argument("--limits_return", action="store_true")
     parser.add_argument("--limits_risk", action="store_true")
     parser.add_argument("--save-result", action="store_true")
+    parser.add_argument(
+        "--returns-source",
+        choices=["historical", "garch"],
+        default="historical",
+        help="Fuente de retornos usada por PSO",
+    )
+    parser.add_argument(
+        "--n-scenarios",
+        default=5000,
+        type=int,
+        help="Escenarios simulados por activo cuando --returns-source=garch",
+    )
 
     args = parser.parse_args()
 
@@ -37,6 +49,12 @@ def main():
 
     # 🔹 Cargar retornos históricos
     mean_return, returns_matrix = load_crypto_returns(assets)
+
+    if args.returns_source == "garch":
+        mean_return, returns_matrix = simulate_garch_returns(
+            returns_matrix,
+            n_scenarios=args.n_scenarios,
+        )
 
     if args.limits_return:
         get_limits_return_target(mean_return)
@@ -90,6 +108,7 @@ def main():
             args.target_value,
             portfolio_risk,
             portfolio_mean,
+            args.returns_source,
         )
 
 
