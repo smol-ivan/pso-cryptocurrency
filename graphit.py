@@ -84,6 +84,13 @@ def main():
 
         df_pso = pd.read_csv(res_file)
 
+        # Solo graficar archivos de frontera (target_value,risk,return).
+        # Evita romper el flujo cuando existen CSV auxiliares como
+        # *_weights.csv o backtest_summary.csv.
+        required_cols = {"target_value", "risk", "return"}
+        if not required_cols.issubset(df_pso.columns):
+            continue
+
         # Ordenar por riesgo para que se vea como frontera
         df_pso = df_pso.sort_values(by="risk")
 

@@ -74,3 +74,26 @@ Solo garch:
 ./gen_frontier.sh minimize_risk garch
 python graphit.py --returns-source garch
 ```
+
+
+## Opciones combinadas de `gen_frontier.sh`
+
+El script de frontera soporta en simultáneo:
+
+- `returns_source` (`historical` o `garch`)
+- `--run-backtest` para ejecutar backtest al terminar PSO
+- `--clean` para limpiar `outputs/` y salir
+- uso automático de `./.venv/bin/python` cuando existe
+
+Ejemplos:
+
+```bash
+# Frontera + backtest usando histórico
+./gen_frontier.sh minimize_risk historical --run-backtest
+
+# Frontera + backtest usando garch
+./gen_frontier.sh maximize_return garch --run-backtest
+
+# Limpiar salidas
+./gen_frontier.sh minimize_risk --clean
+```
