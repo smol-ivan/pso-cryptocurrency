@@ -1,30 +1,27 @@
 from abc import ABC, abstractmethod
 from typing import List
 
-import numpy as np
-
 from models.particle import Particle
 
 
-class Topologia(ABC):
+class Topology(ABC):
     @abstractmethod
-    def get_best_particle(self, idx_particle: int, swarm: List["Particle"]):
-        """Devuelve la posicion de la particula dentro del 'vecindario'"""
+    def get_best_particle(self, particle_index: int, swarm: List["Particle"]) -> Particle:
+        """Return the best particle in the local neighborhood."""
         pass
 
 
-class TopologiaAnillo(Topologia):
-    def __init__(self, k_vecinos: int = 1) -> np.ndarray:
-        # k=1 particula solo habla con uno por izq y der
-        self.k = k_vecinos
+class RingTopology(Topology):
+    def __init__(self, k_neighbors: int = 1) -> None:
+        self.neighbors = k_neighbors
 
-    def get_best_particle(self, idx_particle: int, swarm: List["Particle"]):
-        n = len(swarm)
-        vecindario = []
+    def get_best_particle(self, particle_index: int, swarm: List["Particle"]) -> Particle:
+        swarm_size = len(swarm)
+        neighborhood: List[Particle] = []
 
-        for i in range(-self.k, self.k + 1):
-            idx_vecino = (idx_particle + i) % n
-            vecindario.append(swarm[idx_vecino])
+        for offset in range(-self.neighbors, self.neighbors + 1):
+            neighbor_index = (particle_index + offset) % swarm_size
+            neighborhood.append(swarm[neighbor_index])
 
-        best_vecino = min(vecindario, key=lambda p: p.best_val)
-        return best_vecino
+        best_neighbor = min(neighborhood, key=lambda particle: particle.best_val)
+        return best_neighbor

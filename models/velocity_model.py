@@ -6,35 +6,35 @@ import numpy as np
 from models.particle import Particle
 
 
-class ModeloVelocidad(ABC):
+class VelocityModel(ABC):
     @abstractmethod
-    def actualizar(self, particula: Particle, mejor_g_pos: np.ndarray):
-        """Acualiza la velocidad y posicion de la particula"""
+    def update(self, particle: Particle, best_reference_position: np.ndarray) -> None:
+        """Update particle velocity and position."""
         pass
 
 
-class Inercia(ModeloVelocidad):
-    def __init__(self, c1: float = 0.5, c2: float = 1.0, inercia: float = 0.8) -> None:
+class Inertia(VelocityModel):
+    def __init__(self, c1: float = 0.5, c2: float = 1.0, inertia: float = 0.8) -> None:
         self.c1 = c1
         self.c2 = c2
-        self.inercia = inercia
+        self.inertia = inertia
 
-    def actualizar(self, particula: Particle, mejor_g_pos: np.ndarray):
+    def update(self, particle: Particle, best_reference_position: np.ndarray) -> None:
         r1, r2 = random(), random()
 
-        nueva_velocidad = (
-            (self.inercia * particula.velocity)
-            + (self.c1 * r1 * (particula.best_pos - particula.position))
-            + (self.c2 * r2 * (mejor_g_pos - particula.position))
+        new_velocity = (
+            (self.inertia * particle.velocity)
+            + (self.c1 * r1 * (particle.best_pos - particle.position))
+            + (self.c2 * r2 * (best_reference_position - particle.position))
         )
 
-        particula.velocity = nueva_velocidad
-        nueva_posicion = particula.position + particula.velocity
+        particle.velocity = new_velocity
+        new_position = particle.position + particle.velocity
 
-        # Normalización para mantener los pesos del portafolio (suma = 1)
-        nueva_posicion = np.maximum(0, nueva_posicion)
-        total_weight = np.sum(nueva_posicion)
+        # Keep non-negative portfolio weights and enforce sum(weights) = 1.
+        new_position = np.maximum(0, new_position)
+        total_weight = np.sum(new_position)
         if total_weight > 0:
-            nueva_posicion /= total_weight
+            new_position /= total_weight
 
-        particula.position = nueva_posicion
+        particle.position = new_position

@@ -1,11 +1,11 @@
 # PSO cryptocurrency
-## Comandos escenciales
-### Setup del entorno
+## Essential commands
+### Environment setup
 ```sh
-$ uv sync 
+$ uv sync
 ```
 
-### Ejecucion
+### Run
 
 ```sh
 uv run python main.py
