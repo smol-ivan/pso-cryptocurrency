@@ -1,62 +1,24 @@
-import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 from datetime import datetime
 
-
-from models.fitness_function import CVaR
-from models.topology import RingTopology
-from models.velocity_model import Inertia
-from run_pso import run_pso, PSOInputData
-from utils import load_crypto_returns
-
-
-def calculate_metrics(returns_matrix, weights, cvar_alpha=0.95):
-    """Calcula métricas para un portafolio dado"""
-    portfolio_returns = returns_matrix @ weights
-
-    mean_ret = portfolio_returns.mean()
-    volatility = portfolio_returns.std()
-    var_threshold = np.percentile(portfolio_returns, (1 - cvar_alpha) * 100)
-    tail_losses = portfolio_returns[portfolio_returns <= var_threshold]
-    cvar = -tail_losses.mean()
-
-    sharpe = mean_ret / volatility if volatility > 0 else 0
-
-    return {
-        "mean_return": mean_ret,
-        "cvar": cvar,
-        "volatility": volatility,
-        "sharpe_ratio": sharpe,
-    }
-
-
-def plot_backtest(returns_matrix, weights_list):
-    """Grafica el desempeño acumulado de los portafolios"""
-    fig = go.Figure()
-    
-    for idx, weights in enumerate(weights_list):
-        portfolio_rets = returns_matrix @ weights
-        cumulative_rets = (1 + portfolio_rets).cumprod() - 1
-        
-        fig.add_trace(go.Scatter(
-            x=np.arange(len(cumulative_rets)),
-            y=cumulative_rets * 100,
-            mode="lines",
-            name=f"Portfolio {idx+1}",
-            hovertemplate="Día %{x}<br>Retorno Acum: %{y:.2f}%<extra></extra>"
-        ))
-    
-    fig.update_layout(
-        title="Backtesting: Retorno Acumulado de Portafolios",
-        xaxis_title="Días",
-        yaxis_title="Retorno Acumulado (%)",
-        hovermode="x unified",
-        height=400
-    )
-    
-    return fig
+from src.models.fitness_function import CVaR
+from src.models.topology import RingTopology
+from src.models.velocity_model import Inertia
+from src.run_pso import PSOInputData, run_pso
+from src.ui.charts import (
+    build_backtesting_returns_figure,
+    build_frontier_figure,
+    build_portfolio_pie_figure,
+)
+from src.ui.colors import get_crypto_colors
+from src.ui.metrics import (
+    annualized_return,
+    build_metrics_dataframe,
+    build_weights_table,
+    top_sharpe_indices,
+)
+from src.utils import load_crypto_returns
 
 
 def main():
@@ -79,7 +41,6 @@ def main():
         st.subheader("PSO Parameters")
         num_points = st.slider("Puntos en frontera", 10, 100, 30)
         n_swarm = st.slider("Tamaño del swarm", 20, 200, 100)
-        iterations = st.slider("Iteraciones", 50, 500, 200)
 
         st.subheader("Market Data")
         start_date = st.date_input(
@@ -95,6 +56,14 @@ def main():
 
         st.subheader("CVaR Parameters")
         alpha = st.slider("Alpha (confianza)", 0.80, 0.99, 0.95)
+        penalty = st.number_input(
+            "Penalty (target constraint)",
+            min_value=500.0,
+            max_value=2000.0,
+            value=500.0,
+            step=1.0,
+            help="Cuánto penalizar si el portafolio se aleja del target. Valores típicos: 10-100"
+        )
 
     # Botón para ejecutar
     if st.button("▶️ Ejecutar PSO", width='stretch'):
@@ -114,7 +83,7 @@ def main():
         with st.spinner("Ejecutando PSO..."):
             try:
                 # Crear dependencias
-                fitness_fn = CVaR(alpha=alpha, penalty=1e6)
+                fitness_fn = CVaR(alpha=alpha, penalty=penalty)
                 velocity_model = Inertia(c1=c1, c2=c2, inertia=inertia)
                 topology = RingTopology(k_neighbors=1)
 
@@ -134,7 +103,6 @@ def main():
                     input_data=input_data,
                     num_points=num_points,
                     n_swarm=n_swarm,
-                    iterations=iterations,
                     fitness_function=fitness_fn,
                     velocity_model=velocity_model,
                     topology=topology,
@@ -149,6 +117,24 @@ def main():
                 st.session_state.alpha = alpha
                 st.session_state.returns_matrix = returns_matrix
                 st.session_state.returns_index = returns_index
+                
+                # Cargar automáticamente datos de backtesting
+                try:
+                    backtest_start = end_date
+                    backtest_end = datetime.now().date()
+
+                    if backtest_start < backtest_end:
+                        _, bt_returns_matrix, bt_returns_index = load_crypto_returns(
+                            assets,
+                            start=backtest_start.isoformat(),
+                            end=backtest_end.isoformat(),
+                            interval=interval,
+                        )
+                        st.session_state.bt_returns_matrix = bt_returns_matrix
+                        st.session_state.bt_returns_index = bt_returns_index
+                except Exception as e:
+                    st.warning(f"No se cargaron datos automáticos de backtesting: {str(e)}")
+                
                 st.success("✅ PSO completado!")
 
             except Exception as e:
@@ -165,13 +151,11 @@ def main():
         st.divider()
         st.header("📊 Resultados")
 
-        # Calcular métricas para cada punto
-        metrics_list = []
-        for weights in result.weights:
-            metrics = calculate_metrics(returns_matrix, weights, cvar_alpha=alpha)
-            metrics_list.append(metrics)
-
-        df_metrics = pd.DataFrame(metrics_list)
+        df_metrics = build_metrics_dataframe(
+            returns_matrix=returns_matrix,
+            weights_list=result.weights,
+            cvar_alpha=alpha,
+        )
 
         # TABS: Una para la frontera, otra para backtesting
         tab1, tab2 = st.tabs(["📈 Frontera Eficiente", "📉 Backtesting"])
@@ -181,27 +165,7 @@ def main():
             col1, col2 = st.columns(2)
 
             with col1:
-                fig_frontier = go.Figure()
-                fig_frontier.add_trace(
-                    go.Scatter(
-                        x=df_metrics["cvar"],
-                        y=df_metrics["mean_return"],
-                        mode="markers+lines",
-                        name="Frontera Eficiente",
-                        marker=dict(
-                            size=8,
-                            color=df_metrics["sharpe_ratio"],
-                            colorscale="Viridis",
-                            showscale=True,
-                        ),
-                    )
-                )
-                fig_frontier.update_layout(
-                    title="Frontera Eficiente (Risk vs Return)",
-                    xaxis_title=f"CVaR {alpha * 100}%",
-                    yaxis_title="Retorno Esperado",
-                    hovermode="closest",
-                )
+                fig_frontier = build_frontier_figure(df_metrics, alpha=alpha)
                 st.plotly_chart(fig_frontier, width='stretch')
 
             with col2:
@@ -230,14 +194,14 @@ def main():
             with col_bt1:
                 backtest_start = st.date_input(
                     "Fecha inicio backtesting",
-                    value=st.session_state.end_date,
+                    value=pd.to_datetime(st.session_state.end_date).date(),
                     key="bt_start"
                 )
             
             with col_bt2:
                 backtest_end = st.date_input(
                     "Fecha fin backtesting",
-                    value=datetime.now(),
+                    value=datetime.now().date(),
                     key="bt_end"
                 )
             
@@ -268,15 +232,11 @@ def main():
                 
                 st.subheader("📉 Rendimiento acumulado en backtesting")
                 default_count = min(3, len(result.weights))
-                top_sharpe_indices = (
-                    df_metrics["sharpe_ratio"].nlargest(default_count).index.to_list()
-                    if default_count > 0
-                    else []
-                )
+                default_selected_indices = top_sharpe_indices(df_metrics, default_count)
                 selected_indices = st.multiselect(
                     "Selecciona portafolios para backtesting",
                     options=list(range(len(result.weights))),
-                    default=top_sharpe_indices,
+                    default=default_selected_indices,
                     format_func=lambda idx: (
                         f"Portafolio {idx + 1} | "
                         f"ret={df_metrics.iloc[idx]['mean_return']:.4f}, "
@@ -286,51 +246,70 @@ def main():
                 )
 
                 if selected_indices:
-                    # Gráficas de composición
-                    cols_comp = st.columns(len(selected_indices))
+                    # Obtener colores dinámicos para los activos seleccionados
+                    crypto_colors = get_crypto_colors(assets)
+                    
+                    # Mostrar leyenda de colores UNA SOLA VEZ
+                    st.subheader("📊 Leyenda de Criptos")
+                    cols_legend = st.columns(len(assets))
+                    for col_idx, asset in enumerate(assets):
+                        with cols_legend[col_idx]:
+                            color = crypto_colors[asset]
+                            st.markdown(
+                                f"<div style='background-color:{color}; padding:10px; border-radius:5px; text-align:center'>"
+                                f"<b style='color:white'>{asset}</b></div>",
+                                unsafe_allow_html=True
+                            )
+                    
+                    st.divider()
+                    
+                    # Gráficas de composición con colores fijos - LAYOUT DE 2 COLUMNAS
+                    st.subheader("📈 Composición de Portafolios")
+                    cols_pie = st.columns(2)
                     for col_idx, idx in enumerate(selected_indices):
-                        with cols_comp[col_idx]:
-                            fig_pie = go.Figure(data=[go.Pie(
-                                labels=assets,
-                                values=result.weights[idx],
-                                title=f"Portafolio {idx + 1}<br>Ret: {df_metrics.iloc[idx]['mean_return']*100:.2f}%"
-                            )])
-                            fig_pie.update_layout(height=400)
+                        with cols_pie[col_idx % 2]:
+                            # Mapear colores dinámicos a cada activo
+                            colors = [crypto_colors[asset] for asset in assets]
+
+                            fig_pie = build_portfolio_pie_figure(
+                                assets=assets,
+                                weights=result.weights[idx],
+                                colors=colors,
+                                portfolio_number=idx + 1,
+                            )
                             st.plotly_chart(fig_pie, use_container_width=True)
+                            
+                            # Mostrar retorno esperado (diario y anual)
+                            ret_daily = df_metrics.iloc[idx]['mean_return']
+                            ret_annual = annualized_return(ret_daily)
+                            
+                            col_a, col_b = st.columns(2)
+                            with col_a:
+                                st.metric("Retorno Diario", f"{ret_daily*100:.3f}%")
+                            with col_b:
+                                st.metric("Retorno Anual", f"{ret_annual*100:.2f}%")
+                    
+                    st.divider()
                     
                     # Tabla de pesos
-                    st.subheader("📊 Composición de Portafolios (Pesos)")
-                    weights_data = {}
-                    for col_idx, idx in enumerate(selected_indices):
-                        weights_data[f"Portafolio {idx + 1}"] = result.weights[idx]
-                    df_weights = pd.DataFrame(weights_data, index=assets)
+                    st.subheader("📊 Pesos Exactos por Portafolio")
+                    df_weights = build_weights_table(
+                        assets=assets,
+                        weights=result.weights,
+                        selected_indices=selected_indices,
+                    )
                     st.dataframe(
                         (df_weights * 100).round(2).astype(str) + "%",
-                        use_container_width=True
+                        width='stretch'
                     )
                     
                     # Gráfica de desempeño
                     st.subheader("📈 Rendimiento Acumulado en Backtesting")
-                    fig_performance = go.Figure()
-                    for idx in selected_indices:
-                        portfolio_returns = bt_returns_matrix @ result.weights[idx]
-                        cumulative_returns = np.cumprod(1 + portfolio_returns) - 1
-                        fig_performance.add_trace(
-                            go.Scatter(
-                                x=bt_returns_index,
-                                y=cumulative_returns * 100,
-                                mode="lines",
-                                name=f"Portafolio {idx + 1}",
-                                hovertemplate="Fecha: %{x|%Y-%m-%d}<br>Retorno: %{y:.2f}%<extra></extra>"
-                            )
-                        )
-
-                    fig_performance.update_layout(
-                        title="Rendimiento en Backtesting (Retorno Acumulado %)",
-                        xaxis_title="Fecha",
-                        yaxis_title="Retorno Acumulado (%)",
-                        hovermode="x unified",
-                        height=500,
+                    fig_performance = build_backtesting_returns_figure(
+                        returns_matrix=bt_returns_matrix,
+                        returns_index=bt_returns_index,
+                        weights=result.weights,
+                        selected_indices=selected_indices,
                     )
                     st.plotly_chart(fig_performance, width='stretch')
 

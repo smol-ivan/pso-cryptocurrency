@@ -2,10 +2,10 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from models.fitness_function import CVaR, FitnessFunction
-from models.topology import RingTopology, Topology
-from models.velocity_model import Inertia, VelocityModel
-from pso import pso
+from .models.fitness_function import CVaR, FitnessFunction
+from .models.topology import RingTopology, Topology
+from .models.velocity_model import Inertia, VelocityModel
+from .pso import pso
 
 
 @dataclass
@@ -28,13 +28,16 @@ class PSOInputData:
 def run_pso(
     num_points: int = 50,
     n_swarm: int = 100,
-    iterations: int = 200,
+    epsilon: float = 1e-5,
     # Dependenties
     input_data: PSOInputData | None = None,
     fitness_function: FitnessFunction | None = None,
     velocity_model: VelocityModel | None = None,
     topology: Topology | None = None,
 ) -> EfficientFrontier:
+    if input_data is None:
+        raise ValueError("input_data is required and must include mean_return and returns_matrix.")
+
     if not fitness_function or not velocity_model or not topology:
         fitness_function = CVaR()
         velocity_model = Inertia()
@@ -53,17 +56,15 @@ def run_pso(
     # Run pso for each point
     print(f"Ejecutando {num_points} optimizaciones PSO...")
     for i, target in enumerate(target_values):
-        print(f"  [{i + 1}/{num_points}] Target={target:.6f}")
-
         # Run pso
         best_fitness, best_position = pso(
                 returns_matrix=input_data.returns_matrix,
-                iterations=iterations,
                 swarm_size=n_swarm,
                 target_value=target,
                 fitness_function=fitness_function,
                 velocity_model=velocity_model,
-                topology=topology
+                topology=topology,
+                epsilon=epsilon,
                 )
 
         weights_list.append(best_position.copy())

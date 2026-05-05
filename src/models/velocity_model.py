@@ -3,7 +3,7 @@ from random import random
 
 import numpy as np
 
-from models.particle import Particle
+from .particle import Particle
 
 
 class VelocityModel(ABC):

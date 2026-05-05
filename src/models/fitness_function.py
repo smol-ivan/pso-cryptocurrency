@@ -13,7 +13,7 @@ class FitnessFunction(ABC):
 
 
 class CVaR(FitnessFunction):
-    def __init__(self, alpha: float = 0.95, penalty: float = 1e6) -> None:
+    def __init__(self, alpha: float = 0.95, penalty: float = 50.0) -> None:
         self.alpha = alpha
         self.penalty = penalty
 
@@ -31,10 +31,10 @@ class CVaR(FitnessFunction):
         # CVaR from returns is negative in loss tails; convert to positive risk.
         risk = -cvar
 
-        fitness = risk
-
-        if expected_return < target_value:
-            diff = target_value - expected_return
-            fitness += self.penalty * (diff**2)
+        # Trade-off: minimiza riesgo, pero considera distancia al target
+        # Si retorno es exactamente el target, penalty = 0
+        # Si se aleja, aumenta linealmente
+        target_diff = abs(expected_return - target_value)
+        fitness = risk + self.penalty * target_diff
 
         return fitness

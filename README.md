@@ -8,5 +8,5 @@ $ uv sync
 ### Run
 
 ```sh
-uv run python main.py
+uv run streamlit run app.py
 ```
