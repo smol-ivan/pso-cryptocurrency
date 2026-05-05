@@ -25,3 +25,8 @@ class RingTopology(Topology):
 
         best_neighbor = min(neighborhood, key=lambda particle: particle.best_val)
         return best_neighbor
+
+
+class GlobalTopology(Topology):
+    def get_best_particle(self, particle_index: int, swarm: List["Particle"]) -> Particle:
+        return min(swarm, key=lambda particle: particle.best_val)

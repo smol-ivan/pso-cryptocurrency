@@ -26,18 +26,15 @@ class PSOInputData:
 
 
 def run_pso(
+    input_data: PSOInputData,
     num_points: int = 50,
     n_swarm: int = 100,
     epsilon: float = 1e-5,
     # Dependenties
-    input_data: PSOInputData | None = None,
     fitness_function: FitnessFunction | None = None,
     velocity_model: VelocityModel | None = None,
     topology: Topology | None = None,
 ) -> EfficientFrontier:
-    if input_data is None:
-        raise ValueError("input_data is required and must include mean_return and returns_matrix.")
-
     if not fitness_function or not velocity_model or not topology:
         fitness_function = CVaR()
         velocity_model = Inertia()

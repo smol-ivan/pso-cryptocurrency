@@ -38,3 +38,23 @@ class CVaR(FitnessFunction):
         fitness = risk + self.penalty * target_diff
 
         return fitness
+
+
+class MaxDrawdown(FitnessFunction):
+    def __init__(self, penalty: float = 50.0) -> None:
+        self.penalty = penalty
+
+    def evaluate(
+        self, position: np.ndarray, returns_matrix: np.ndarray, target_value: float
+    ) -> float:
+        portfolio_returns = returns_matrix @ position
+        expected_return = portfolio_returns.mean()
+
+        cumulative_returns = np.cumprod(1 + portfolio_returns)
+        running_max = np.maximum.accumulate(cumulative_returns)
+        drawdowns = (cumulative_returns - running_max) / running_max
+        max_drawdown = -drawdowns.min()
+
+        target_diff = abs(expected_return - target_value)
+        fitness = float(max_drawdown + self.penalty * target_diff)
+        return fitness

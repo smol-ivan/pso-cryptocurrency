@@ -3,27 +3,134 @@ import pandas as pd
 import plotly.graph_objects as go
 
 
-def build_frontier_figure(df_metrics: pd.DataFrame, alpha: float) -> go.Figure:
+def build_frontier_figure(
+    df_metrics: pd.DataFrame,
+    risk_column: str,
+    risk_label: str,
+    title: str = "Frontera Eficiente (Risk vs Return)",
+) -> go.Figure:
+    chart_df = df_metrics.sort_values(by=risk_column).reset_index(drop=True)
     fig = go.Figure()
     fig.add_trace(
         go.Scatter(
-            x=df_metrics["cvar"],
-            y=df_metrics["mean_return"],
+            x=chart_df[risk_column],
+            y=chart_df["mean_return"],
             mode="markers+lines",
             name="Frontera Eficiente",
             marker=dict(
                 size=8,
-                color=df_metrics["sharpe_ratio"],
+                color=chart_df["sharpe_ratio"],
                 colorscale="Viridis",
                 showscale=True,
             ),
         )
     )
     fig.update_layout(
-        title="Frontera Eficiente (Risk vs Return)",
-        xaxis_title=f"CVaR {alpha * 100}%",
+        title=title,
+        xaxis_title=risk_label,
         yaxis_title="Retorno Esperado",
         hovermode="closest",
+    )
+    return fig
+
+
+def build_experiment_comparison_figure(
+    summary_df: pd.DataFrame, risk_column: str, risk_label: str, yaxis_title: str
+) -> go.Figure:
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=summary_df[risk_column],
+            y=summary_df["selected_mean_return"],
+            mode="markers",
+            marker=dict(
+                size=12,
+                color=summary_df["selected_sharpe_ratio"],
+                colorscale="Viridis",
+                showscale=True,
+                colorbar=dict(title="Sharpe"),
+            ),
+            name="Configuraciones",
+            customdata=summary_df[["name", "objective", "velocity", "topology"]],
+            hovertemplate=(
+                "Config: %{customdata[0]}<br>"
+                "Objective: %{customdata[1]}<br>"
+                "Velocity: %{customdata[2]}<br>"
+                "Topology: %{customdata[3]}<br>"
+                f"{risk_label}: %{{x:.6f}}<br>"
+                "Return: %{y:.6f}<extra></extra>"
+            ),
+        )
+    )
+    fig.update_layout(
+        title="Comparativa de configuraciones",
+        xaxis_title=risk_label,
+        yaxis_title=yaxis_title,
+        hovermode="closest",
+    )
+    return fig
+
+
+def build_multi_point_comparison_figure(
+    points_df: pd.DataFrame,
+    risk_column: str,
+    risk_label: str,
+) -> go.Figure:
+    fig = go.Figure()
+    for config_name, config_df in points_df.groupby("name"):
+        config_df = config_df.sort_values(by="portfolio_index")
+        fig.add_trace(
+            go.Scatter(
+                x=config_df[risk_column],
+                y=config_df["mean_return"],
+                mode="markers+lines",
+                name=config_name,
+                customdata=config_df[["portfolio_index", "target_return"]],
+                hovertemplate=(
+                    "Config: " + config_name + "<br>"
+                    "Portfolio index: %{customdata[0]}<br>"
+                    "Target return: %{customdata[1]:.6f}<br>"
+                    f"{risk_label}: %{{x:.6f}}<br>"
+                    "Mean return: %{y:.6f}<extra></extra>"
+                ),
+            )
+        )
+
+    fig.update_layout(
+        title="Comparativa multi-punto por configuración",
+        xaxis_title=risk_label,
+        yaxis_title="Mean return",
+        hovermode="closest",
+    )
+    return fig
+
+
+def build_cross_config_returns_figure(
+    returns_matrix: np.ndarray,
+    returns_index: pd.Index,
+    config_names: list[str],
+    weights_by_config: list[np.ndarray],
+) -> go.Figure:
+    fig = go.Figure()
+    for config_name, weights in zip(config_names, weights_by_config):
+        portfolio_returns = returns_matrix @ weights
+        cumulative_returns = np.cumprod(1 + portfolio_returns) - 1
+        fig.add_trace(
+            go.Scatter(
+                x=returns_index,
+                y=cumulative_returns * 100,
+                mode="lines",
+                name=config_name,
+                hovertemplate="Fecha: %{x|%Y-%m-%d}<br>Retorno: %{y:.2f}%<extra></extra>",
+            )
+        )
+
+    fig.update_layout(
+        title="Comparativa de rendimiento acumulado entre configuraciones",
+        xaxis_title="Fecha",
+        yaxis_title="Retorno acumulado (%)",
+        hovermode="x unified",
+        height=500,
     )
     return fig
 

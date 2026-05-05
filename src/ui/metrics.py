@@ -2,6 +2,13 @@ import numpy as np
 import pandas as pd
 
 
+def _max_drawdown(portfolio_returns: np.ndarray) -> float:
+    cumulative_returns = np.cumprod(1 + portfolio_returns)
+    running_max = np.maximum.accumulate(cumulative_returns)
+    drawdowns = (cumulative_returns - running_max) / running_max
+    return float(-drawdowns.min())
+
+
 def calculate_portfolio_metrics(
     returns_matrix: np.ndarray, weights: np.ndarray, cvar_alpha: float = 0.95
 ) -> dict[str, float]:
@@ -14,31 +21,56 @@ def calculate_portfolio_metrics(
     var_threshold = np.percentile(portfolio_returns, (1 - cvar_alpha) * 100)
     tail_losses = portfolio_returns[portfolio_returns <= var_threshold]
     cvar = float(-tail_losses.mean())
+    max_drawdown = _max_drawdown(portfolio_returns)
 
     sharpe_ratio = mean_return / volatility if volatility > 0 else 0.0
 
     return {
         "mean_return": mean_return,
         "cvar": cvar,
+        "max_drawdown": max_drawdown,
         "volatility": volatility,
         "sharpe_ratio": sharpe_ratio,
     }
 
 
 def build_metrics_dataframe(
-    returns_matrix: np.ndarray, weights_list: list[np.ndarray], cvar_alpha: float
+    returns_matrix: np.ndarray,
+    weights_list: list[np.ndarray],
+    cvar_alpha: float,
+    fitness_values: np.ndarray | None = None,
 ) -> pd.DataFrame:
     metrics_list = [
         calculate_portfolio_metrics(returns_matrix, weights, cvar_alpha=cvar_alpha)
         for weights in weights_list
     ]
-    return pd.DataFrame(metrics_list)
+    df_metrics = pd.DataFrame(metrics_list)
+    if fitness_values is not None:
+        df_metrics["fitness"] = fitness_values
+    return df_metrics
 
 
-def top_sharpe_indices(df_metrics: pd.DataFrame, count: int) -> list[int]:
-    if count <= 0:
+def spaced_frontier_indices(total_points: int, count: int) -> list[int]:
+    """Select indices distributed across the frontier, including endpoints."""
+    if count <= 0 or total_points <= 0:
         return []
-    return df_metrics["sharpe_ratio"].nlargest(count).index.to_list()
+
+    count = min(count, total_points)
+    if count == 1:
+        return [0]
+
+    spaced = np.linspace(0, total_points - 1, count)
+    unique_indices = sorted({int(round(value)) for value in spaced})
+
+    if len(unique_indices) < count:
+        for idx in range(total_points):
+            if idx not in unique_indices:
+                unique_indices.append(idx)
+            if len(unique_indices) == count:
+                break
+        unique_indices = sorted(unique_indices)
+
+    return unique_indices
 
 
 def annualized_return(daily_return: float, periods_per_year: int = 252) -> float:
