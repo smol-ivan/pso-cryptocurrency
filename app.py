@@ -5,26 +5,21 @@ import pandas as pd
 import streamlit as st
 
 from src.experiments import ExperimentConfig, run_experiments
+from src.finance import (
+    annualized_return,
+    build_metrics_dataframe,
+    build_multi_point_dataframe,
+    build_summary_dataframe,
+    build_weights_table,
+    spaced_frontier_indices,
+)
 from src.models.fitness_function import CVaR, MaxDrawdown
 from src.models.topology import GlobalTopology, RingTopology
 from src.models.velocity_model import Constriction, Inertia
 from src.persistence import load_experiments, save_experiments
 from src.run_pso import PSOInputData
-from src.ui.charts import (
-    build_backtesting_returns_figure,
-    build_cross_config_returns_figure,
-    build_experiment_comparison_figure,
-    build_frontier_figure,
-    build_multi_point_comparison_figure,
-    build_portfolio_pie_figure,
-)
+from src.ui import charts
 from src.ui.colors import get_crypto_colors
-from src.ui.metrics import (
-    annualized_return,
-    build_metrics_dataframe,
-    build_weights_table,
-    spaced_frontier_indices,
-)
 from src.utils import load_crypto_returns
 
 
@@ -289,33 +284,12 @@ def main():
             value=default_mid_index,
         )
 
-    summary_rows = []
-    for experiment in experiments:
-        df = metrics_by_config[experiment.config.name]
-        if comparison_mode == "Best Sharpe":
-            selected_idx = int(df["sharpe_ratio"].idxmax())
-        else:
-            selected_idx = fixed_portfolio_index - 1
-
-        summary_rows.append(
-            {
-                "name": experiment.config.name,
-                "objective": experiment.config.objective_name,
-                "velocity": experiment.config.velocity_name,
-                "topology": experiment.config.topology_name,
-                "selected_portfolio": selected_idx + 1,
-                "selected_target_return": float(
-                    experiment.frontier.target_values[selected_idx]
-                ),
-                "selected_mean_return": float(df.loc[selected_idx, "mean_return"]),
-                "selected_cvar": float(df.loc[selected_idx, "cvar"]),
-                "selected_max_drawdown": float(df.loc[selected_idx, "max_drawdown"]),
-                "selected_volatility": float(df.loc[selected_idx, "volatility"]),
-                "selected_sharpe_ratio": float(df.loc[selected_idx, "sharpe_ratio"]),
-                "selected_fitness": float(df.loc[selected_idx, "fitness"]),
-            }
-        )
-    summary_df = pd.DataFrame(summary_rows)
+    summary_df = build_summary_dataframe(
+        experiments=experiments,
+        metrics_by_config=metrics_by_config,
+        comparison_mode=comparison_mode,
+        fixed_portfolio_index=fixed_portfolio_index,
+    )
 
     st.divider()
     tab_comparison, tab_detail, tab_backtesting = st.tabs(
@@ -331,11 +305,13 @@ def main():
         else:
             comparison_y_label = "Mean return (portfolio with best Sharpe)"
 
-        fig_comparison = build_experiment_comparison_figure(
-            summary_df=summary_df,
-            risk_column=summary_risk_column,
-            risk_label=risk_label,
-            yaxis_title=comparison_y_label,
+        fig_comparison = charts.build_comparison_charts(
+            charts.ComparisonChartsData(
+                summary_df=summary_df,
+                risk_column=summary_risk_column,
+                risk_label=risk_label,
+                yaxis_title=comparison_y_label,
+            )
         )
         st.plotly_chart(fig_comparison, width="stretch")
         summary_display = summary_df[
@@ -385,28 +361,17 @@ def main():
             ),
         )
         if selected_point_indices:
-            points_rows = []
-            for experiment in experiments:
-                df_metrics = metrics_by_config[experiment.config.name]
-                for point_index in selected_point_indices:
-                    idx = point_index - 1
-                    points_rows.append(
-                        {
-                            "name": experiment.config.name,
-                            "portfolio_index": point_index,
-                            "target_return": float(experiment.frontier.target_values[idx]),
-                            "mean_return": float(df_metrics.loc[idx, "mean_return"]),
-                            "cvar": float(df_metrics.loc[idx, "cvar"]),
-                            "max_drawdown": float(df_metrics.loc[idx, "max_drawdown"]),
-                            "volatility": float(df_metrics.loc[idx, "volatility"]),
-                        }
-                    )
-
-            points_df = pd.DataFrame(points_rows)
-            fig_multi_point = build_multi_point_comparison_figure(
-                points_df=points_df,
-                risk_column=risk_column,
-                risk_label=risk_label,
+            points_df = build_multi_point_dataframe(
+                experiments=experiments,
+                metrics_by_config=metrics_by_config,
+                selected_point_indices=selected_point_indices,
+            )
+            fig_multi_point = charts.build_multi_point_charts(
+                charts.MultiPointChartsData(
+                    points_df=points_df,
+                    risk_column=risk_column,
+                    risk_label=risk_label,
+                )
             )
             st.plotly_chart(fig_multi_point, width="stretch")
 
@@ -425,11 +390,13 @@ def main():
                 selected_experiment = experiments_by_name[row.name]
                 weights_by_config.append(selected_experiment.frontier.weights[selected_idx])
 
-            fig_cross_config = build_cross_config_returns_figure(
-                returns_matrix=bt_returns_matrix,
-                returns_index=bt_returns_index,
-                config_names=selected_config_names,
-                weights_by_config=weights_by_config,
+            fig_cross_config = charts.build_cross_config_charts(
+                charts.CrossConfigChartsData(
+                    returns_matrix=bt_returns_matrix,
+                    returns_index=bt_returns_index,
+                    config_names=selected_config_names,
+                    weights_by_config=weights_by_config,
+                )
             )
             st.plotly_chart(fig_cross_config, width="stretch")
 
@@ -443,11 +410,13 @@ def main():
             experiment for experiment in experiments if experiment.config.name == selected_config
         )
         df_metrics = metrics_by_config[selected_experiment.config.name]
-        fig_frontier = build_frontier_figure(
-            df_metrics=df_metrics,
-            risk_column=risk_column,
-            risk_label=risk_label,
-            title=f"Frontier - {selected_experiment.config.name}",
+        fig_frontier = charts.build_frontier_chart(
+            charts.FrontierChartData(
+                df_metrics=df_metrics,
+                risk_column=risk_column,
+                risk_label=risk_label,
+                title=f"Frontier - {selected_experiment.config.name}",
+            )
         )
         st.plotly_chart(fig_frontier, width="stretch")
 
@@ -521,11 +490,13 @@ def main():
         for col_idx, idx in enumerate(selected_indices):
             with cols_pie[col_idx % 2]:
                 colors = [crypto_colors[asset] for asset in assets]
-                fig_pie = build_portfolio_pie_figure(
-                    assets=assets,
-                    weights=selected_experiment.frontier.weights[idx],
-                    colors=colors,
-                    portfolio_number=idx + 1,
+                fig_pie = charts.build_portfolio_pie_chart(
+                    charts.PortfolioPieChartData(
+                        assets=assets,
+                        weights=selected_experiment.frontier.weights[idx],
+                        colors=colors,
+                        portfolio_number=idx + 1,
+                    )
                 )
                 st.plotly_chart(fig_pie, width="stretch")
 
@@ -547,11 +518,13 @@ def main():
         st.dataframe((df_weights * 100).round(2).astype(str) + "%", width="stretch")
 
         st.subheader("Cumulative return")
-        fig_performance = build_backtesting_returns_figure(
-            returns_matrix=bt_returns_matrix,
-            returns_index=bt_returns_index,
-            weights=selected_experiment.frontier.weights,
-            selected_indices=selected_indices,
+        fig_performance = charts.build_backtesting_chart(
+            charts.BacktestingChartData(
+                returns_matrix=bt_returns_matrix,
+                returns_index=bt_returns_index,
+                weights=selected_experiment.frontier.weights,
+                selected_indices=selected_indices,
+            )
         )
         st.plotly_chart(fig_performance, width="stretch")
 
