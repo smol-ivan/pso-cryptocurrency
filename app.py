@@ -1,85 +1,16 @@
-from datetime import datetime
-from itertools import product
-
 import pandas as pd
 import streamlit as st
 
-from src.experiments import ExperimentConfig, run_experiments
-from src.finance import (
-    annualized_return,
-    build_metrics_dataframe,
-    build_multi_point_dataframe,
-    build_summary_dataframe,
-    build_weights_table,
-    spaced_frontier_indices,
-)
-from src.models.fitness_function import CVaR, MaxDrawdown
-from src.models.topology import GlobalTopology, RingTopology
-from src.models.velocity_model import Constriction, Inertia
-from src.persistence import load_experiments, save_experiments
-from src.run_pso import PSOInputData
-from src.ui import charts
-from src.ui.colors import get_crypto_colors
-from src.utils import load_crypto_returns
+from src.controllers import run_analysis_pipeline
+from src.finance import build_summary_dataframe
+from src.models.state import ExperimentsPayload
+from src.persistence import load_experiments
+from src.ui.tabs import render_backtesting_tab, render_comparison_tab, render_detail_tab
 
 
 OBJECTIVE_OPTIONS = ["CVaR", "MaxDrawdown"]
 VELOCITY_OPTIONS = ["Inertia", "Constriction"]
 TOPOLOGY_OPTIONS = ["Ring", "Global"]
-
-
-def _build_experiment_configs(
-    selected_objectives: list[str],
-    selected_velocities: list[str],
-    selected_topologies: list[str],
-    *,
-    alpha: float,
-    penalty: float,
-    c1: float,
-    c2: float,
-    inertia: float,
-    num_points: int,
-    n_swarm: int,
-    epsilon: float,
-    base_seed: int | None,
-) -> list[ExperimentConfig]:
-    configs: list[ExperimentConfig] = []
-
-    for config_index, (objective_name, velocity_name, topology_name) in enumerate(
-        product(
-        selected_objectives, selected_velocities, selected_topologies
-        )
-    ):
-        if objective_name == "CVaR":
-            fitness_function = CVaR(alpha=alpha, penalty=penalty)
-        else:
-            fitness_function = MaxDrawdown(penalty=penalty)
-
-        if velocity_name == "Inertia":
-            velocity_model = Inertia(c1=c1, c2=c2, inertia=inertia)
-        else:
-            velocity_model = Constriction(c1=c1, c2=c2)
-
-        topology = RingTopology(k_neighbors=1) if topology_name == "Ring" else GlobalTopology()
-        config_name = f"{objective_name} | {velocity_name} | {topology_name}"
-
-        configs.append(
-            ExperimentConfig(
-                name=config_name,
-                objective_name=objective_name,
-                velocity_name=velocity_name,
-                topology_name=topology_name,
-                fitness_function=fitness_function,
-                velocity_model=velocity_model,
-                topology=topology,
-                num_points=num_points,
-                n_swarm=n_swarm,
-                epsilon=epsilon,
-                seed=None if base_seed is None else base_seed + config_index,
-            )
-        )
-
-    return configs
 
 
 def _risk_axes(alpha: float) -> dict[str, tuple[str, str, str]]:
@@ -101,159 +32,121 @@ def main():
 
     with st.sidebar:
         st.header("⚙️ Configuration")
+        with st.form("config_form"):
+            assets_default = ["BTC-USD", "ETH-USD", "SOL-USD", "ADA-USD"]
+            assets = st.multiselect(
+                "Assets",
+                options=assets_default,
+                default=assets_default,
+            )
 
-        assets_default = ["BTC-USD", "ETH-USD", "SOL-USD", "ADA-USD"]
-        assets = st.multiselect(
-            "Assets",
-            options=assets_default,
-            default=assets_default,
-        )
+            st.subheader("Market data")
+            start_date = st.date_input("Start date", value=pd.to_datetime("2020-01-01"))
+            end_date = st.date_input("End date", value=pd.to_datetime("2024-01-01"))
+            interval = st.selectbox("Interval", options=["1d", "1wk", "1mo"], index=0)
 
-        st.subheader("Market data")
-        start_date = st.date_input("Start date", value=pd.to_datetime("2020-01-01"))
-        end_date = st.date_input("End date", value=pd.to_datetime("2024-01-01"))
-        interval = st.selectbox("Interval", options=["1d", "1wk", "1mo"], index=0)
+            st.subheader("PSO")
+            num_points = st.slider("Frontier points", 10, 100, 30)
+            n_swarm = st.slider("Swarm size", 20, 200, 100)
+            epsilon = st.number_input("Convergence epsilon", value=1e-5, format="%e")
+            random_seed_enabled = st.checkbox("Use reproducible seeds", value=True)
+            base_seed = st.number_input(
+                "Base seed",
+                min_value=0,
+                max_value=10_000_000,
+                value=42,
+                step=1,
+                disabled=not random_seed_enabled,
+            )
 
-        st.subheader("PSO")
-        num_points = st.slider("Frontier points", 10, 100, 30)
-        n_swarm = st.slider("Swarm size", 20, 200, 100)
-        epsilon = st.number_input("Convergence epsilon", value=1e-5, format="%e")
-        random_seed_enabled = st.checkbox("Use reproducible seeds", value=True)
-        base_seed = st.number_input(
-            "Base seed",
-            min_value=0,
-            max_value=10_000_000,
-            value=42,
-            step=1,
-            disabled=not random_seed_enabled,
-        )
+            st.subheader("Objectives")
+            selected_objectives = st.multiselect(
+                "Fitness functions",
+                options=OBJECTIVE_OPTIONS,
+                default=["CVaR"],
+            )
+            alpha = st.slider("CVaR alpha", 0.80, 0.99, 0.95)
+            penalty = st.number_input(
+                "Target penalty",
+                min_value=1.0,
+                max_value=5000.0,
+                value=500.0,
+                step=1.0,
+            )
 
-        st.subheader("Objectives")
-        selected_objectives = st.multiselect(
-            "Fitness functions",
-            options=OBJECTIVE_OPTIONS,
-            default=["CVaR"],
-        )
-        alpha = st.slider("CVaR alpha", 0.80, 0.99, 0.95)
-        penalty = st.number_input(
-            "Target penalty",
-            min_value=1.0,
-            max_value=5000.0,
-            value=500.0,
-            step=1.0,
-        )
+            st.subheader("Velocity models")
+            selected_velocities = st.multiselect(
+                "Velocity",
+                options=VELOCITY_OPTIONS,
+                default=["Inertia"],
+            )
+            c1 = st.slider("c1", 0.5, 3.0, 1.7)
+            c2 = st.slider("c2", 0.5, 3.0, 1.7)
+            inertia = st.slider("inertia (w)", 0.4, 1.0, 0.8)
 
-        st.subheader("Velocity models")
-        selected_velocities = st.multiselect(
-            "Velocity",
-            options=VELOCITY_OPTIONS,
-            default=["Inertia"],
-        )
-        c1 = st.slider("c1", 0.5, 3.0, 1.7)
-        c2 = st.slider("c2", 0.5, 3.0, 1.7)
-        inertia = st.slider("inertia (w)", 0.4, 1.0, 0.8)
+            st.subheader("Topologies")
+            selected_topologies = st.multiselect(
+                "Topology",
+                options=TOPOLOGY_OPTIONS,
+                default=["Ring"],
+            )
+            submitted = st.form_submit_button("▶️ Run experiments", use_container_width=True)
 
-        st.subheader("Topologies")
-        selected_topologies = st.multiselect(
-            "Topology",
-            options=TOPOLOGY_OPTIONS,
-            default=["Ring"],
-        )
-
-    if st.button("▶️ Run experiments", width="stretch"):
-        if not assets:
-            st.error("Select at least one asset.")
-            return
-        if start_date >= end_date:
-            st.error("Start date must be before end date.")
-            return
-        if not selected_objectives or not selected_velocities or not selected_topologies:
-            st.error("Select at least one option in objective, velocity and topology.")
-            return
-        if "Constriction" in selected_velocities and (c1 + c2) <= 4:
-            st.error("Constriction requires c1 + c2 > 4.")
-            return
-
+    if submitted:
         with st.spinner("Running experiments..."):
-            try:
-                mean_return, returns_matrix, returns_index = load_crypto_returns(
-                    assets,
-                    start=start_date.isoformat(),
-                    end=end_date.isoformat(),
-                    interval=interval,
-                )
-                input_data = PSOInputData(
-                    mean_return=mean_return,
-                    returns_matrix=returns_matrix,
-                )
-                configs = _build_experiment_configs(
-                    selected_objectives,
-                    selected_velocities,
-                    selected_topologies,
-                    alpha=alpha,
-                    penalty=penalty,
-                    c1=c1,
-                    c2=c2,
-                    inertia=inertia,
-                    num_points=num_points,
-                    n_swarm=n_swarm,
-                    epsilon=epsilon,
-                    base_seed=int(base_seed) if random_seed_enabled else None,
-                )
-                experiments = run_experiments(input_data=input_data, experiment_configs=configs)
+            pipeline_result = run_analysis_pipeline(
+                assets=assets,
+                start_date=start_date,
+                end_date=end_date,
+                interval=interval,
+                selected_objectives=selected_objectives,
+                selected_velocities=selected_velocities,
+                selected_topologies=selected_topologies,
+                alpha=alpha,
+                penalty=penalty,
+                c1=c1,
+                c2=c2,
+                inertia=inertia,
+                num_points=num_points,
+                n_swarm=n_swarm,
+                epsilon=epsilon,
+                base_seed=int(base_seed) if random_seed_enabled else None,
+            )
 
-                metrics_by_config: dict[str, pd.DataFrame] = {}
-                for experiment in experiments:
-                    metrics_by_config[experiment.config.name] = build_metrics_dataframe(
-                        returns_matrix=returns_matrix,
-                        weights_list=experiment.frontier.weights,
-                        cvar_alpha=alpha,
-                        fitness_values=experiment.frontier.best_fitnesses,
-                    )
+        if pipeline_result.validation_error:
+            st.error(pipeline_result.validation_error)
+            return
+        if pipeline_result.error:
+            st.error(f"Error while running experiments: {pipeline_result.error}")
+            return
+        if pipeline_result.backtesting_warning:
+            st.warning(
+                f"Automatic backtesting data could not be loaded: {pipeline_result.backtesting_warning}"
+            )
+        if pipeline_result.payload is None:
+            st.error("Error while running experiments: missing analysis payload.")
+            return
 
-                bt_returns_matrix = None
-                bt_returns_index = None
-                try:
-                    backtest_start = end_date
-                    backtest_end = datetime.now().date()
-                    if backtest_start < backtest_end:
-                        _, bt_returns_matrix, bt_returns_index = load_crypto_returns(
-                            assets,
-                            start=backtest_start.isoformat(),
-                            end=backtest_end.isoformat(),
-                            interval=interval,
-                        )
-                except Exception as error:
-                    st.warning(f"Automatic backtesting data could not be loaded: {error}")
+        st.session_state.experiments_payload = pipeline_result.payload
+        st.success(f"Completed {pipeline_result.completed_experiments} experiment(s).")
 
-                payload = {
-                    "assets": assets,
-                    "start_date": start_date.isoformat(),
-                    "end_date": end_date.isoformat(),
-                    "interval": interval,
-                    "alpha": alpha,
-                    "returns_matrix": returns_matrix,
-                    "returns_index": returns_index,
-                    "experiments": experiments,
-                    "metrics_by_config": metrics_by_config,
-                    "bt_returns_matrix": bt_returns_matrix,
-                    "bt_returns_index": bt_returns_index,
-                }
-                st.session_state.experiments_payload = payload
-                save_experiments(payload)
-                st.success(f"Completed {len(experiments)} experiment(s).")
-            except Exception as error:
-                st.error(f"Error while running experiments: {error}")
-
-    payload = st.session_state.get("experiments_payload")
+    payload: ExperimentsPayload | dict[str, object] | None = st.session_state.get(
+        "experiments_payload"
+    )
     if payload is None:
         st.info("Run at least one experiment to see comparison and detailed analysis.")
         return
+    if isinstance(payload, dict):
+        payload = ExperimentsPayload.from_dict(payload)
+        st.session_state.experiments_payload = payload
+    if not isinstance(payload, ExperimentsPayload):
+        st.error("Invalid experiments payload in session state.")
+        return
 
-    experiments = payload["experiments"]
-    metrics_by_config = payload["metrics_by_config"]
-    alpha = payload["alpha"]
-    assets = payload["assets"]
+    experiments = payload.experiments
+    metrics_by_config = payload.metrics_by_config
+    alpha = payload.alpha
+    assets = payload.assets
 
     risk_options = _risk_axes(alpha)
     selected_risk = st.selectbox(
@@ -297,236 +190,38 @@ def main():
     )
 
     with tab_comparison:
-        if comparison_mode == "Fixed frontier index":
-            st.caption(
-                f"Comparing all configurations at portfolio index #{fixed_portfolio_index}."
-            )
-            comparison_y_label = "Mean return (fixed frontier index)"
-        else:
-            comparison_y_label = "Mean return (portfolio with best Sharpe)"
-
-        fig_comparison = charts.build_comparison_charts(
-            charts.ComparisonChartsData(
-                summary_df=summary_df,
-                risk_column=summary_risk_column,
-                risk_label=risk_label,
-                yaxis_title=comparison_y_label,
-            )
+        render_comparison_tab(
+            payload=payload,
+            experiments=experiments,
+            metrics_by_config=metrics_by_config,
+            summary_df=summary_df,
+            comparison_mode=comparison_mode,
+            fixed_portfolio_index=fixed_portfolio_index,
+            common_frontier_points=common_frontier_points,
+            risk_column=risk_column,
+            risk_label=risk_label,
+            summary_risk_column=summary_risk_column,
         )
-        st.plotly_chart(fig_comparison, width="stretch")
-        summary_display = summary_df[
-            [
-                "name",
-                "objective",
-                "velocity",
-                "topology",
-                "selected_portfolio",
-                "selected_target_return",
-                "selected_mean_return",
-                "selected_cvar",
-                "selected_max_drawdown",
-                "selected_volatility",
-                "selected_sharpe_ratio",
-            ]
-        ].copy()
-        summary_display.columns = [
-            "Configuration",
-            "Objective",
-            "Velocity",
-            "Topology",
-            "Portfolio #",
-            "Target return",
-            "Mean return",
-            "CVaR",
-            "Max drawdown",
-            "Volatility",
-            "Sharpe",
-        ]
-        st.dataframe(summary_display.round(6), width="stretch")
-
-        default_point_selection = sorted(
-            {
-                1,
-                max(1, common_frontier_points // 2),
-                common_frontier_points,
-            }
-        )
-        selected_point_indices = st.multiselect(
-            "Extra comparison points (same indices across configurations)",
-            options=list(range(1, common_frontier_points + 1)),
-            default=default_point_selection,
-            help=(
-                "Choose 2-3 (or more) frontier indices to compare each configuration "
-                "with multiple representative points."
-            ),
-        )
-        if selected_point_indices:
-            points_df = build_multi_point_dataframe(
-                experiments=experiments,
-                metrics_by_config=metrics_by_config,
-                selected_point_indices=selected_point_indices,
-            )
-            fig_multi_point = charts.build_multi_point_charts(
-                charts.MultiPointChartsData(
-                    points_df=points_df,
-                    risk_column=risk_column,
-                    risk_label=risk_label,
-                )
-            )
-            st.plotly_chart(fig_multi_point, width="stretch")
-
-        bt_returns_matrix = payload.get("bt_returns_matrix")
-        bt_returns_index = payload.get("bt_returns_index")
-        if bt_returns_matrix is not None and bt_returns_index is not None:
-            st.subheader("📈 Cross-configuration backtesting")
-            st.caption(
-                "One line per configuration, using the portfolio currently selected by the comparison mode."
-            )
-            selected_config_names = summary_df["name"].tolist()
-            weights_by_config = []
-            experiments_by_name = {experiment.config.name: experiment for experiment in experiments}
-            for row in summary_df.itertuples(index=False):
-                selected_idx = int(row.selected_portfolio) - 1
-                selected_experiment = experiments_by_name[row.name]
-                weights_by_config.append(selected_experiment.frontier.weights[selected_idx])
-
-            fig_cross_config = charts.build_cross_config_charts(
-                charts.CrossConfigChartsData(
-                    returns_matrix=bt_returns_matrix,
-                    returns_index=bt_returns_index,
-                    config_names=selected_config_names,
-                    weights_by_config=weights_by_config,
-                )
-            )
-            st.plotly_chart(fig_cross_config, width="stretch")
 
     with tab_detail:
-        selected_config = st.selectbox(
-            "Configuration",
-            options=experiment_names,
-            key="detail_config",
+        render_detail_tab(
+            experiments=experiments,
+            metrics_by_config=metrics_by_config,
+            experiment_names=experiment_names,
+            alpha=alpha,
+            risk_column=risk_column,
+            risk_label=risk_label,
         )
-        selected_experiment = next(
-            experiment for experiment in experiments if experiment.config.name == selected_config
-        )
-        df_metrics = metrics_by_config[selected_experiment.config.name]
-        fig_frontier = charts.build_frontier_chart(
-            charts.FrontierChartData(
-                df_metrics=df_metrics,
-                risk_column=risk_column,
-                risk_label=risk_label,
-                title=f"Frontier - {selected_experiment.config.name}",
-            )
-        )
-        st.plotly_chart(fig_frontier, width="stretch")
-
-        df_display = pd.DataFrame(
-            {
-                f"CVaR {alpha * 100:.0f}%": df_metrics["cvar"] * 100,
-                "Max Drawdown (%)": df_metrics["max_drawdown"] * 100,
-                "Return (%)": df_metrics["mean_return"] * 100,
-                "Volatility (%)": df_metrics["volatility"] * 100,
-                "Sharpe Ratio": df_metrics["sharpe_ratio"],
-                "Fitness": df_metrics["fitness"],
-            }
-        )
-        st.dataframe(df_display, width="stretch")
 
     with tab_backtesting:
-        selected_config = st.selectbox(
-            "Configuration for backtesting",
-            options=experiment_names,
-            key="backtesting_config",
-        )
-        selected_experiment = next(
-            experiment for experiment in experiments if experiment.config.name == selected_config
-        )
-        df_metrics = metrics_by_config[selected_experiment.config.name]
-
-        bt_returns_matrix = payload.get("bt_returns_matrix")
-        bt_returns_index = payload.get("bt_returns_index")
-        if bt_returns_matrix is None or bt_returns_index is None:
-            st.info("No automatic backtesting data available for this run.")
-            return
-
-        st.caption(
-            f"Backtesting range: {payload['end_date']} → {datetime.now().date().isoformat()}"
-        )
-        default_count = min(5, len(selected_experiment.frontier.weights))
-        default_selected_indices = spaced_frontier_indices(
-            total_points=len(selected_experiment.frontier.weights),
-            count=default_count,
-        )
-        selected_indices = st.multiselect(
-            "Portfolios",
-            options=list(range(len(selected_experiment.frontier.weights))),
-            default=default_selected_indices,
-            format_func=lambda idx: (
-                f"Portfolio {idx + 1} | "
-                f"ret={df_metrics.iloc[idx]['mean_return']:.4f}, "
-                f"{risk_column}={df_metrics.iloc[idx][risk_column]:.4f}"
-            ),
-            key=f"bt_multiselect_{selected_config}",
-        )
-
-        if not selected_indices:
-            return
-
-        crypto_colors = get_crypto_colors(assets)
-        st.subheader("Asset color legend")
-        cols_legend = st.columns(len(assets))
-        for col_idx, asset in enumerate(assets):
-            with cols_legend[col_idx]:
-                color = crypto_colors[asset]
-                st.markdown(
-                    f"<div style='background-color:{color}; padding:10px; border-radius:5px; text-align:center'>"
-                    f"<b style='color:white'>{asset}</b></div>",
-                    unsafe_allow_html=True,
-                )
-
-        st.divider()
-        st.subheader("Portfolio composition")
-        cols_pie = st.columns(2)
-        for col_idx, idx in enumerate(selected_indices):
-            with cols_pie[col_idx % 2]:
-                colors = [crypto_colors[asset] for asset in assets]
-                fig_pie = charts.build_portfolio_pie_chart(
-                    charts.PortfolioPieChartData(
-                        assets=assets,
-                        weights=selected_experiment.frontier.weights[idx],
-                        colors=colors,
-                        portfolio_number=idx + 1,
-                    )
-                )
-                st.plotly_chart(fig_pie, width="stretch")
-
-                ret_daily = df_metrics.iloc[idx]["mean_return"]
-                ret_annual = annualized_return(ret_daily)
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    st.metric("Daily return", f"{ret_daily * 100:.3f}%")
-                with col_b:
-                    st.metric("Annualized return", f"{ret_annual * 100:.2f}%")
-
-        st.divider()
-        st.subheader("Portfolio weights")
-        df_weights = build_weights_table(
+        render_backtesting_tab(
+            payload=payload,
+            experiments=experiments,
+            metrics_by_config=metrics_by_config,
+            experiment_names=experiment_names,
             assets=assets,
-            weights=selected_experiment.frontier.weights,
-            selected_indices=selected_indices,
+            risk_column=risk_column,
         )
-        st.dataframe((df_weights * 100).round(2).astype(str) + "%", width="stretch")
-
-        st.subheader("Cumulative return")
-        fig_performance = charts.build_backtesting_chart(
-            charts.BacktestingChartData(
-                returns_matrix=bt_returns_matrix,
-                returns_index=bt_returns_index,
-                weights=selected_experiment.frontier.weights,
-                selected_indices=selected_indices,
-            )
-        )
-        st.plotly_chart(fig_performance, width="stretch")
 
 
 if __name__ == "__main__":
