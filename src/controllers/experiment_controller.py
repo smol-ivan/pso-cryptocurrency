@@ -8,10 +8,8 @@ import streamlit as st
 
 from src.experiments import ExperimentConfig, run_experiments
 from src.finance import build_metrics_dataframe
-from src.models.fitness_function import CVaR, MaxDrawdown
 from src.models.state import ExperimentsPayload
-from src.models.topology import GlobalTopology, RingTopology
-from src.models.velocity_model import Constriction, Inertia
+from src.pso import CVaR, Constriction, GlobalTopology, Inertia, MaxDrawdown, RingTopology
 from src.persistence import save_experiments
 from src.run_pso import PSOInputData
 from src.utils import load_crypto_returns

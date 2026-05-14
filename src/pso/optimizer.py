@@ -2,10 +2,10 @@ from typing import List
 
 import numpy as np
 
-from .models.fitness_function import FitnessFunction
-from .models.particle import Particle
-from .models.topology import Topology
-from .models.velocity_model import VelocityModel
+from .fitness_function import FitnessFunction
+from .particle import Particle
+from .topology import Topology
+from .velocity_model import VelocityModel
 
 
 def initialize_swarm(

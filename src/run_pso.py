@@ -2,10 +2,13 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .models.fitness_function import CVaR, FitnessFunction
-from .models.topology import RingTopology, Topology
-from .models.velocity_model import Inertia, VelocityModel
-from .pso import pso
+if __package__ is None or __package__ == "":
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from src.pso import CVaR, FitnessFunction, Inertia, RingTopology, Topology, VelocityModel, pso
 
 
 @dataclass

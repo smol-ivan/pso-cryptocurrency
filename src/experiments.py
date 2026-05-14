@@ -2,9 +2,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .models.fitness_function import FitnessFunction
-from .models.topology import Topology
-from .models.velocity_model import VelocityModel
+from src.pso import FitnessFunction, Topology, VelocityModel
 from .run_pso import EfficientFrontier, PSOInputData, run_pso
 
 
