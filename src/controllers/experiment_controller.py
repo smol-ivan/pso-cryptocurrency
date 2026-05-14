@@ -2,7 +2,9 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from itertools import product
 
+import numpy as np
 import pandas as pd
+import streamlit as st
 
 from src.experiments import ExperimentConfig, run_experiments
 from src.finance import build_metrics_dataframe
@@ -22,6 +24,53 @@ class AnalysisPipelineResult:
     validation_error: str | None = None
     error: str | None = None
     backtesting_warning: str | None = None
+
+
+@st.cache_data
+def _load_crypto_returns_cached(
+    assets_tuple: tuple[str, ...],
+    start: str,
+    end: str,
+    interval: str,
+):
+    """Cached version of load_crypto_returns. Assets must be passed as tuple."""
+    return load_crypto_returns(list(assets_tuple), start=start, end=end, interval=interval)
+
+
+@st.cache_data
+def _run_experiments_cached(
+    mean_return: np.ndarray,
+    returns_matrix: np.ndarray,
+    selected_objectives_tuple: tuple[str, ...],
+    selected_velocities_tuple: tuple[str, ...],
+    selected_topologies_tuple: tuple[str, ...],
+    alpha: float,
+    penalty: float,
+    c1: float,
+    c2: float,
+    inertia: float,
+    num_points: int,
+    n_swarm: int,
+    epsilon: float,
+    base_seed: int | None,
+):
+    """Cached version of experiments execution. Uses simple types for hashing."""
+    input_data = PSOInputData(mean_return=mean_return, returns_matrix=returns_matrix)
+    configs = _build_experiment_configs(
+        list(selected_objectives_tuple),
+        list(selected_velocities_tuple),
+        list(selected_topologies_tuple),
+        alpha=alpha,
+        penalty=penalty,
+        c1=c1,
+        c2=c2,
+        inertia=inertia,
+        num_points=num_points,
+        n_swarm=n_swarm,
+        epsilon=epsilon,
+        base_seed=base_seed,
+    )
+    return run_experiments(input_data=input_data, experiment_configs=configs)
 
 
 def _build_experiment_configs(
@@ -107,20 +156,21 @@ def run_analysis_pipeline(
         return AnalysisPipelineResult(validation_error="Constriction requires c1 + c2 > 4.")
 
     try:
-        mean_return, returns_matrix, returns_index = load_crypto_returns(
-            assets,
+        # Use cached version with hashable tuple
+        mean_return, returns_matrix, returns_index = _load_crypto_returns_cached(
+            tuple(assets),
             start=start_date.isoformat(),
             end=end_date.isoformat(),
             interval=interval,
         )
-        input_data = PSOInputData(
+        
+        # Use cached experiments with hashable tuples
+        experiments = _run_experiments_cached(
             mean_return=mean_return,
             returns_matrix=returns_matrix,
-        )
-        configs = _build_experiment_configs(
-            selected_objectives,
-            selected_velocities,
-            selected_topologies,
+            selected_objectives_tuple=tuple(selected_objectives),
+            selected_velocities_tuple=tuple(selected_velocities),
+            selected_topologies_tuple=tuple(selected_topologies),
             alpha=alpha,
             penalty=penalty,
             c1=c1,
@@ -131,7 +181,6 @@ def run_analysis_pipeline(
             epsilon=epsilon,
             base_seed=base_seed,
         )
-        experiments = run_experiments(input_data=input_data, experiment_configs=configs)
 
         metrics_by_config: dict[str, pd.DataFrame] = {}
         for experiment in experiments:
@@ -149,8 +198,8 @@ def run_analysis_pipeline(
             backtest_start = end_date
             backtest_end = datetime.now().date()
             if backtest_start < backtest_end:
-                _, bt_returns_matrix, bt_returns_index = load_crypto_returns(
-                    assets,
+                _, bt_returns_matrix, bt_returns_index = _load_crypto_returns_cached(
+                    tuple(assets),
                     start=backtest_start.isoformat(),
                     end=backtest_end.isoformat(),
                     interval=interval,
