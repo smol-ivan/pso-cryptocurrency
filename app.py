@@ -2,10 +2,9 @@ import pandas as pd
 import streamlit as st
 
 from src.controllers import run_analysis_pipeline
-from src.finance import build_summary_dataframe
 from src.models.state import ExperimentsPayload
 from src.persistence import load_experiments
-from src.ui.tabs import render_backtesting_tab, render_comparison_tab, render_detail_tab
+from src.ui.tabs import render_analysis_tab, render_comparison_tab
 
 
 OBJECTIVE_OPTIONS = ["CVaR", "MaxDrawdown"]
@@ -17,7 +16,11 @@ def _risk_axes(alpha: float) -> dict[str, tuple[str, str, str]]:
     return {
         "CVaR": ("cvar", f"CVaR {alpha * 100:.0f}%", "selected_cvar"),
         "Max Drawdown": ("max_drawdown", "Max Drawdown", "selected_max_drawdown"),
-        "Volatility": ("volatility", "Volatility", "selected_volatility"),
+        "Desviación estándar": (
+            "volatility",
+            "Desviación estándar",
+            "selected_volatility",
+        ),
     }
 
 
@@ -154,73 +157,30 @@ def main():
         options=list(risk_options.keys()),
         help="This changes the X-axis metric used for comparison and individual frontier views.",
     )
-    risk_column, risk_label, summary_risk_column = risk_options[selected_risk]
+    risk_column, risk_label, _ = risk_options[selected_risk]
 
     experiment_names = [experiment.config.name for experiment in experiments]
-    common_frontier_points = min(len(experiment.frontier.weights) for experiment in experiments)
-    comparison_mode = st.radio(
-        "Comparison portfolio selector",
-        options=["Best Sharpe", "Fixed frontier index"],
-        horizontal=True,
-        help=(
-            "Best Sharpe picks one representative portfolio per configuration. "
-            "Fixed frontier index compares the same frontier position across all configurations."
-        ),
-    )
-    fixed_portfolio_index = 1
-    if comparison_mode == "Fixed frontier index":
-        default_mid_index = max(1, (common_frontier_points // 2) + 1)
-        fixed_portfolio_index = st.slider(
-            "Frontier portfolio index",
-            min_value=1,
-            max_value=common_frontier_points,
-            value=default_mid_index,
-        )
-
-    summary_df = build_summary_dataframe(
-        experiments=experiments,
-        metrics_by_config=metrics_by_config,
-        comparison_mode=comparison_mode,
-        fixed_portfolio_index=fixed_portfolio_index,
-    )
 
     st.divider()
-    tab_comparison, tab_detail, tab_backtesting = st.tabs(
-        ["📊 Comparison", "🔎 Single configuration", "📉 Backtesting"]
-    )
+    tab_comparison, tab_analysis = st.tabs(["📊 Comparison", "🔎 Individual Analysis"])
 
     with tab_comparison:
         render_comparison_tab(
-            payload=payload,
             experiments=experiments,
             metrics_by_config=metrics_by_config,
-            summary_df=summary_df,
-            comparison_mode=comparison_mode,
-            fixed_portfolio_index=fixed_portfolio_index,
-            common_frontier_points=common_frontier_points,
-            risk_column=risk_column,
-            risk_label=risk_label,
-            summary_risk_column=summary_risk_column,
-        )
-
-    with tab_detail:
-        render_detail_tab(
-            experiments=experiments,
-            metrics_by_config=metrics_by_config,
-            experiment_names=experiment_names,
-            alpha=alpha,
             risk_column=risk_column,
             risk_label=risk_label,
         )
 
-    with tab_backtesting:
-        render_backtesting_tab(
+    with tab_analysis:
+        render_analysis_tab(
             payload=payload,
             experiments=experiments,
             metrics_by_config=metrics_by_config,
             experiment_names=experiment_names,
             assets=assets,
             risk_column=risk_column,
+            risk_label=risk_label,
         )
 
 

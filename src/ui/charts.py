@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+from plotly.colors import qualitative
 
 
 @dataclass
@@ -34,6 +35,15 @@ class FrontierChartData:
     risk_column: str
     risk_label: str
     title: str = "Frontera Eficiente (Risk vs Return)"
+
+
+@dataclass
+class ComparisonFrontierChartData:
+    experiments: list
+    metrics_by_config: dict[str, pd.DataFrame]
+    risk_column: str
+    risk_label: str
+    title: str = "Fronteras eficientes por configuración"
 
 
 @dataclass
@@ -81,6 +91,16 @@ def build_cross_config_charts(data: CrossConfigChartsData) -> go.Figure:
 def build_frontier_chart(data: FrontierChartData) -> go.Figure:
     return _build_frontier_figure(
         df_metrics=data.df_metrics,
+        risk_column=data.risk_column,
+        risk_label=data.risk_label,
+        title=data.title,
+    )
+
+
+def build_comparison_frontier_chart(data: ComparisonFrontierChartData) -> go.Figure:
+    return _build_comparison_frontier_figure(
+        experiments=data.experiments,
+        metrics_by_config=data.metrics_by_config,
         risk_column=data.risk_column,
         risk_label=data.risk_label,
         title=data.title,
@@ -169,6 +189,51 @@ def _build_experiment_comparison_figure(
         xaxis_title=risk_label,
         yaxis_title=yaxis_title,
         hovermode="closest",
+    )
+    return fig
+
+
+def _build_comparison_frontier_figure(
+    experiments: list,
+    metrics_by_config: dict[str, pd.DataFrame],
+    risk_column: str,
+    risk_label: str,
+    title: str,
+) -> go.Figure:
+    fig = go.Figure()
+    colors = qualitative.Plotly
+
+    for index, experiment in enumerate(experiments):
+        config_name = experiment.config.name
+        config_df = metrics_by_config[config_name].copy()
+        config_df = config_df.assign(portfolio_index=np.arange(1, len(config_df) + 1))
+        config_df = config_df.sort_values(by=risk_column).reset_index(drop=True)
+        color = colors[index % len(colors)]
+
+        fig.add_trace(
+            go.Scatter(
+                x=config_df[risk_column],
+                y=config_df["mean_return"],
+                mode="lines+markers",
+                name=config_name,
+                line=dict(color=color, width=2),
+                marker=dict(color=color, size=6),
+                customdata=config_df[["portfolio_index"]],
+                hovertemplate=(
+                    "Configuración: " + config_name + "<br>"
+                    f"{risk_label}: %{{x:.6f}}<br>"
+                    "Retorno esperado: %{y:.6f}<br>"
+                    "Portafolio: %{customdata[0]}<extra></extra>"
+                ),
+            )
+        )
+
+    fig.update_layout(
+        title=title,
+        xaxis_title=risk_label,
+        yaxis_title="Retorno esperado",
+        hovermode="closest",
+        legend_title_text="Configuración",
     )
     return fig
 
