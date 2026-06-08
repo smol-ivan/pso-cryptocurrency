@@ -26,11 +26,23 @@ def calculate_portfolio_metrics(
     tail_losses = portfolio_returns[portfolio_returns <= var_threshold]
     cvar = float(-tail_losses.mean())
 
+    # VaR: convert percentile threshold to positive risk number
+    var = float(-var_threshold)
+
+    # Variance and semivariance
+    variance = float(portfolio_returns.var())
+    expected_return = portfolio_returns.mean()
+    negative_dev = portfolio_returns[portfolio_returns < expected_return] - expected_return
+    semivariance = float(np.mean(negative_dev ** 2)) if negative_dev.size > 0 else 0.0
+
     sharpe_ratio = mean_return / volatility if volatility > 0 else 0.0
 
     return {
         "mean_return": mean_return,
         "cvar": cvar,
+        "var": var,
+        "variance": variance,
+        "semivariance": semivariance,
         "max_drawdown": max_drawdown(portfolio_returns),
         "volatility": volatility,
         "sharpe_ratio": sharpe_ratio,

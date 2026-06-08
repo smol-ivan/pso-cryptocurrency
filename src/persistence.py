@@ -45,7 +45,7 @@ def _serialize_config(config: ExperimentConfig) -> dict:
 
 def _deserialize_config(d: dict) -> ExperimentConfig:
     # Import concrete classes lazily to avoid circular imports on module load.
-    from src.pso import CVaR, MaxDrawdown, Inertia, Constriction, RingTopology, GlobalTopology
+    from src.pso import CVaR, VaR, Variance, Semivariance, MaxDrawdown, Inertia, Constriction, RingTopology, GlobalTopology
 
     ff = d.get("fitness_function", {})
     vm = d.get("velocity_model", {})
@@ -58,6 +58,12 @@ def _deserialize_config(d: dict) -> ExperimentConfig:
         # Handle known classes and any attribute-name mismatches
         if cls_name == "CVaR":
             return CVaR(**kwargs)
+        if cls_name == "VaR":
+            return VaR(**kwargs)
+        if cls_name == "Variance":
+            return Variance(**kwargs)
+        if cls_name == "Semivariance":
+            return Semivariance(**kwargs)
         if cls_name == "MaxDrawdown":
             return MaxDrawdown(**kwargs)
         if cls_name == "Inertia":

@@ -8,7 +8,7 @@ from src.persistence import load_experiments, export_payload_to_bytes, import_pa
 from src.ui.tabs import render_analysis_tab, render_comparison_tab
 
 
-OBJECTIVE_OPTIONS = ["CVaR", "MaxDrawdown"]
+OBJECTIVE_OPTIONS = ["CVaR", "VaR", "Variance", "Semivariance", "MaxDrawdown"]
 VELOCITY_OPTIONS = ["Inertia", "Constriction"]
 TOPOLOGY_OPTIONS = ["Ring", "Global"]
 
@@ -16,6 +16,9 @@ TOPOLOGY_OPTIONS = ["Ring", "Global"]
 def _risk_axes(alpha: float) -> dict[str, tuple[str, str, str]]:
     return {
         "CVaR": ("cvar", f"CVaR {alpha * 100:.0f}%", "selected_cvar"),
+        "VaR": ("var", f"VaR {alpha * 100:.0f}%", "selected_var"),
+        "Variance": ("variance", "Varianza", "selected_variance"),
+        "Semivariance": ("semivariance", "Semivarianza", "selected_semivariance"),
         "Max Drawdown": ("max_drawdown", "Max Drawdown", "selected_max_drawdown"),
         "Desviación estándar": (
             "volatility",

@@ -9,7 +9,7 @@ import streamlit as st
 from src.experiments import ExperimentConfig, run_experiments
 from src.finance import build_metrics_dataframe
 from src.models.state import ExperimentsPayload
-from src.pso import CVaR, Constriction, GlobalTopology, Inertia, MaxDrawdown, RingTopology
+from src.pso import CVaR, VaR, Variance, Semivariance, Constriction, GlobalTopology, Inertia, MaxDrawdown, RingTopology
 from src.persistence import save_experiments
 from src.run_pso import PSOInputData
 from src.utils import load_crypto_returns
@@ -93,6 +93,12 @@ def _build_experiment_configs(
     ):
         if objective_name == "CVaR":
             fitness_function = CVaR(alpha=alpha, penalty=penalty)
+        elif objective_name == "VaR":
+            fitness_function = VaR(alpha=alpha, penalty=penalty)
+        elif objective_name == "Variance":
+            fitness_function = Variance(penalty=penalty)
+        elif objective_name == "Semivariance":
+            fitness_function = Semivariance(penalty=penalty)
         else:
             fitness_function = MaxDrawdown(penalty=penalty)
 
