@@ -65,6 +65,51 @@ def build_metrics_dataframe(
     return df_metrics
 
 
+def build_seed_metrics_dataframe(
+    returns_matrix: np.ndarray,
+    seed_frontiers: list,
+    cvar_alpha: float,
+) -> pd.DataFrame:
+    rows: list[dict[str, float | int]] = []
+    for seed_index, frontier in enumerate(seed_frontiers):
+        metrics = build_metrics_dataframe(
+            returns_matrix=returns_matrix,
+            weights_list=frontier.weights,
+            cvar_alpha=cvar_alpha,
+            fitness_values=frontier.best_fitnesses,
+        )
+        metrics.insert(0, "seed_index", seed_index)
+        metrics.insert(1, "portfolio_index", np.arange(len(metrics)))
+        metrics.insert(2, "target_return", frontier.target_values)
+        rows.extend(metrics.to_dict("records"))
+    return pd.DataFrame(rows)
+
+
+def build_seed_statistics_dataframe(seed_metrics: pd.DataFrame) -> pd.DataFrame:
+    if seed_metrics.empty:
+        return pd.DataFrame()
+
+    metric_columns = [
+        "fitness",
+        "mean_return",
+        "volatility",
+        "variance",
+        "cvar",
+        "var",
+        "semivariance",
+        "max_drawdown",
+        "sharpe_ratio",
+    ]
+    grouped = seed_metrics.groupby("portfolio_index")[metric_columns].agg(
+        ["mean", "std", "min", "max"]
+    )
+    grouped.columns = [f"{metric}_{stat}" for metric, stat in grouped.columns]
+    target_returns = seed_metrics.groupby("portfolio_index")["target_return"].first()
+    result = grouped.reset_index()
+    result.insert(1, "target_return", result["portfolio_index"].map(target_returns))
+    return result
+
+
 def build_summary_dataframe(
     experiments: list[ExperimentResult],
     metrics_by_config: dict[str, pd.DataFrame],

@@ -35,8 +35,11 @@ def _serialize_config(config: ExperimentConfig) -> dict:
         "topology_name": config.topology_name,
         "num_points": config.num_points,
         "n_swarm": config.n_swarm,
-        "epsilon": config.epsilon,
+        "rtol": config.rtol,
+        "atol": config.atol,
+        "patience": config.patience,
         "seed": config.seed,
+        "seed_count": config.seed_count,
         "fitness_function": {"__class__": config.fitness_function.__class__.__name__, **vars(config.fitness_function)},
         "velocity_model": {"__class__": config.velocity_model.__class__.__name__, **vars(config.velocity_model)},
         "topology": {"__class__": config.topology.__class__.__name__, **vars(config.topology)},
@@ -94,8 +97,12 @@ def _deserialize_config(d: dict) -> ExperimentConfig:
         topology=topology,
         num_points=d.get("num_points", 30),
         n_swarm=d.get("n_swarm", 100),
-        epsilon=d.get("epsilon", 1e-5),
+        # Legacy .psodata files used one absolute epsilon and no patience.
+        rtol=d.get("rtol", 0.0),
+        atol=d.get("atol", d.get("epsilon", 1e-5)),
+        patience=d.get("patience", 1),
         seed=d.get("seed"),
+        seed_count=d.get("seed_count", 1),
     )
 
 
@@ -160,6 +167,15 @@ def export_payload_to_bytes(payload: dict) -> bytes:
                 df.to_parquet(buf, index=True)
                 zf.writestr(f"dataframes/{name}.parquet", buf.getvalue())
                 metadata["metrics_by_config"][name] = f"dataframes/{name}.parquet"
+        seed_metrics = getattr(payload, "seed_metrics_by_config", None) if not isinstance(payload, dict) else payload.get("seed_metrics_by_config")
+        metadata["seed_metrics_by_config"] = {}
+        if seed_metrics:
+            for name, df in seed_metrics.items():
+                buf = io.BytesIO()
+                df.to_parquet(buf, index=True)
+                path = f"dataframes/seed_{name}.parquet"
+                zf.writestr(path, buf.getvalue())
+                metadata["seed_metrics_by_config"][name] = path
 
         # Experiments (configs + frontiers)
         experiments = getattr(payload, "experiments", None) if not isinstance(payload, dict) else payload.get("experiments")
@@ -179,33 +195,46 @@ def export_payload_to_bytes(payload: dict) -> bytes:
 
                 # save frontier arrays
                 fr_base = f"experiments/{i}"
-                # target_values
-                if hasattr(frontier, "target_values"):
-                    buf = io.BytesIO()
-                    np.save(buf, frontier.target_values, allow_pickle=False)
-                    zf.writestr(f"{fr_base}/target_values.npy", buf.getvalue())
-                # best_fitnesses
-                if hasattr(frontier, "best_fitnesses"):
-                    buf = io.BytesIO()
-                    np.save(buf, frontier.best_fitnesses, allow_pickle=False)
-                    zf.writestr(f"{fr_base}/best_fitnesses.npy", buf.getvalue())
-                # weights (list of arrays) -> save as npz
-                if hasattr(frontier, "weights") and frontier.weights is not None:
-                    buf = io.BytesIO()
-                    # convert list of arrays into a single 2D array if possible
-                    try:
-                        stacked = np.vstack(frontier.weights)
-                        np.save(buf, stacked, allow_pickle=False)
-                        zf.writestr(f"{fr_base}/weights.npy", buf.getvalue())
-                    except Exception:
-                        # fallback to npz with numbered entries
+
+                def write_frontier(frontier_data: EfficientFrontier, base: str) -> None:
+                    if hasattr(frontier_data, "target_values"):
                         buf = io.BytesIO()
-                        np.savez(buf, *frontier.weights)
-                        zf.writestr(f"{fr_base}/weights.npz", buf.getvalue())
+                        np.save(buf, frontier_data.target_values, allow_pickle=False)
+                        zf.writestr(f"{base}/target_values.npy", buf.getvalue())
+                    if hasattr(frontier_data, "best_fitnesses"):
+                        buf = io.BytesIO()
+                        np.save(buf, frontier_data.best_fitnesses, allow_pickle=False)
+                        zf.writestr(f"{base}/best_fitnesses.npy", buf.getvalue())
+                    if getattr(frontier_data, "convergence_histories", None) is not None:
+                        for point_index, history in enumerate(frontier_data.convergence_histories):
+                            buf = io.BytesIO()
+                            np.save(buf, history, allow_pickle=False)
+                            zf.writestr(f"{base}/convergence_{point_index}.npy", buf.getvalue())
+                    if getattr(frontier_data, "weights", None) is not None:
+                        buf = io.BytesIO()
+                        stacked = np.vstack(frontier_data.weights)
+                        np.save(buf, stacked, allow_pickle=False)
+                        zf.writestr(f"{base}/weights.npy", buf.getvalue())
+
+                write_frontier(frontier, fr_base)
+                seed_frontiers = getattr(frontier, "seed_results", None)
+                seed_paths: list[str] = []
+                if seed_frontiers:
+                    for seed_index, seed_frontier in enumerate(seed_frontiers):
+                        seed_base = f"{fr_base}/seeds/{seed_index}"
+                        write_frontier(seed_frontier, seed_base)
+                        seed_paths.append(seed_base)
 
                 # write experiment metadata
                 zf.writestr(f"{fr_base}/config.json", json.dumps(cfg_dict, default=_isoify))
-                metadata["experiments"].append({"config": f"{fr_base}/config.json", "frontier": fr_base})
+                metadata["experiments"].append(
+                    {
+                        "config": f"{fr_base}/config.json",
+                        "frontier": fr_base,
+                        "seed_frontiers": seed_paths,
+                        "seed_values": getattr(frontier, "seed_values", None),
+                    }
+                )
 
         # Write metadata
         zf.writestr("metadata.json", json.dumps(metadata, ensure_ascii=False))
@@ -250,6 +279,11 @@ def import_payload_from_bytes(data: bytes) -> dict:
         for name, path in metadata.get("metrics_by_config", {}).items():
             b = zf.read(path)
             payload["metrics_by_config"][name] = pd.read_parquet(io.BytesIO(b))
+        payload["seed_metrics_by_config"] = {}
+        for name, path in metadata.get("seed_metrics_by_config", {}).items():
+            payload["seed_metrics_by_config"][name] = pd.read_parquet(
+                io.BytesIO(zf.read(path))
+            )
 
         # experiments
         exps_meta = metadata.get("experiments", [])
@@ -261,30 +295,54 @@ def import_payload_from_bytes(data: bytes) -> dict:
             cfg_dict = json.loads(cfg_bytes)
             config = _deserialize_config(cfg_dict)
 
-            # load frontier
-            target = None
-            best = None
-            weights = None
-            try:
-                target = np.load(io.BytesIO(zf.read(f"{fr_base}/target_values.npy")), allow_pickle=False)
-            except KeyError:
+            def read_frontier(base: str) -> EfficientFrontier:
                 target = None
-            try:
-                best = np.load(io.BytesIO(zf.read(f"{fr_base}/best_fitnesses.npy")), allow_pickle=False)
-            except KeyError:
                 best = None
-            try:
-                weights = np.load(io.BytesIO(zf.read(f"{fr_base}/weights.npy")), allow_pickle=False)
-                # if stacked, each row is a weight vector -> convert to list
-                weights = [row for row in weights]
-            except KeyError:
+                weights = None
+                convergence_histories: list[np.ndarray] = []
                 try:
-                    npz = np.load(io.BytesIO(zf.read(f"{fr_base}/weights.npz")))
-                    weights = [npz[f] for f in npz.files]
+                    target = np.load(io.BytesIO(zf.read(f"{base}/target_values.npy")), allow_pickle=False)
                 except KeyError:
-                    weights = None
+                    pass
+                try:
+                    best = np.load(io.BytesIO(zf.read(f"{base}/best_fitnesses.npy")), allow_pickle=False)
+                except KeyError:
+                    pass
+                point_index = 0
+                while True:
+                    try:
+                        convergence_histories.append(
+                            np.load(io.BytesIO(zf.read(f"{base}/convergence_{point_index}.npy")), allow_pickle=False)
+                        )
+                    except KeyError:
+                        break
+                    point_index += 1
+                try:
+                    weights_array = np.load(
+                        io.BytesIO(zf.read(f"{base}/weights.npy")), allow_pickle=False
+                    )
+                    weights = [row for row in weights_array]
+                except KeyError:
+                    try:
+                        npz = np.load(io.BytesIO(zf.read(f"{base}/weights.npz")))
+                        weights = [npz[name] for name in npz.files]
+                    except KeyError:
+                        weights = None
+                return EfficientFrontier(
+                    target_values=target,
+                    weights=weights,
+                    best_fitnesses=best,
+                    convergence_histories=convergence_histories or None,
+                )
 
-            frontier = EfficientFrontier(target_values=target, weights=weights, best_fitnesses=best)
+            frontier = read_frontier(fr_base)
+            seed_frontiers = [
+                read_frontier(seed_base)
+                for seed_base in item.get("seed_frontiers", [])
+            ]
+            if seed_frontiers:
+                frontier.seed_results = seed_frontiers
+                frontier.seed_values = item.get("seed_values")
             exps.append(ExperimentResult(config=config, frontier=frontier))
 
         payload["experiments"] = exps
@@ -307,6 +365,7 @@ def save_experiments(payload: ExperimentsPayload) -> None:
             "returns_index": payload.returns_index,
             "experiments": payload.experiments,
             "metrics_by_config": payload.metrics_by_config,
+            "seed_metrics_by_config": payload.seed_metrics_by_config,
             "bt_returns_matrix": payload.bt_returns_matrix,
             "bt_returns_index": payload.bt_returns_index,
         }

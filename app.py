@@ -11,6 +11,23 @@ from src.ui.tabs import render_analysis_tab, render_comparison_tab
 OBJECTIVE_OPTIONS = ["CVaR", "VaR", "Variance", "Semivariance", "MaxDrawdown"]
 VELOCITY_OPTIONS = ["Inertia", "Constriction"]
 TOPOLOGY_OPTIONS = ["Ring", "Global"]
+ASSET_OPTIONS = [
+    "BTC-USD",
+    "ETH-USD",
+    "SOL-USD",
+    "ADA-USD",
+    "XRP-USD",
+    "BNB-USD",
+    "DOGE-USD",
+    "AVAX-USD",
+    "DOT-USD",
+    "LINK-USD",
+    "LTC-USD",
+    "BCH-USD",
+    "XLM-USD",
+    "UNI-USD",
+]
+DEFAULT_ASSETS = ["BTC-USD", "ETH-USD", "SOL-USD", "ADA-USD"]
 
 
 def _risk_axes(alpha: float) -> dict[str, tuple[str, str, str]]:
@@ -53,12 +70,12 @@ def main():
         st.header("⚙️ Configuration")
         read_only = st.session_state.get("read_only_mode", False)
         with st.form("config_form"):
-            assets_default = ["BTC-USD", "ETH-USD", "SOL-USD", "ADA-USD"]
             assets = st.multiselect(
                 "Assets",
-                options=assets_default,
-                default=assets_default,
+                options=ASSET_OPTIONS,
+                default=DEFAULT_ASSETS,
                 disabled=read_only,
+                help="BTC, ETH, SOL y ADA están seleccionadas por defecto; las demás son opcionales.",
             )
 
             st.subheader("Market data")
@@ -69,7 +86,28 @@ def main():
             st.subheader("PSO")
             num_points = st.slider("Frontier points", 10, 100, 30, disabled=read_only)
             n_swarm = st.slider("Swarm size", 20, 200, 100, disabled=read_only)
-            epsilon = st.number_input("Convergence epsilon", value=1e-5, format="%e", disabled=read_only)
+            rtol = st.number_input(
+                "Relative convergence tolerance (rtol)",
+                min_value=0.0,
+                value=1e-4,
+                format="%e",
+                disabled=read_only,
+            )
+            atol = st.number_input(
+                "Absolute convergence tolerance (atol)",
+                min_value=0.0,
+                value=1e-8,
+                format="%e",
+                disabled=read_only,
+            )
+            patience = st.number_input(
+                "Convergence patience",
+                min_value=1,
+                max_value=1000,
+                value=10,
+                step=1,
+                disabled=read_only,
+            )
             random_seed_enabled = st.checkbox("Use reproducible seeds", value=True, disabled=read_only)
             base_seed = st.number_input(
                 "Base seed",
@@ -78,6 +116,21 @@ def main():
                 value=42,
                 step=1,
                 disabled=(read_only or not random_seed_enabled),
+            )
+            multi_seed_enabled = st.checkbox(
+                "Run multiple seeds",
+                value=False,
+                disabled=read_only,
+                help="Repite cada configuración completa para medir la variabilidad del PSO.",
+            )
+            seed_count = st.number_input(
+                "Seeds per configuration",
+                min_value=2,
+                max_value=20,
+                value=5,
+                step=1,
+                disabled=(read_only or not multi_seed_enabled),
+                help="5 semillas limita el costo a cinco ejecuciones completas por configuración.",
             )
 
             st.subheader("Objectives")
@@ -138,8 +191,12 @@ def main():
                 inertia=inertia,
                 num_points=num_points,
                 n_swarm=n_swarm,
-                epsilon=epsilon,
+                rtol=rtol,
+                atol=atol,
+                patience=int(patience),
                 base_seed=int(base_seed) if random_seed_enabled else None,
+                multi_seed_enabled=multi_seed_enabled,
+                seed_count=int(seed_count),
             )
 
         if pipeline_result.validation_error:
@@ -207,6 +264,7 @@ def main():
         render_comparison_tab(
             experiments=experiments,
             metrics_by_config=metrics_by_config,
+            seed_metrics_by_config=payload.seed_metrics_by_config,
             risk_column=risk_column,
             risk_label=risk_label,
         )

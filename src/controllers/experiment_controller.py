@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 
 from src.experiments import ExperimentConfig, run_experiments
-from src.finance import build_metrics_dataframe
+from src.finance import build_metrics_dataframe, build_seed_metrics_dataframe
 from src.models.state import ExperimentsPayload
 from src.pso import CVaR, VaR, Variance, Semivariance, Constriction, GlobalTopology, Inertia, MaxDrawdown, RingTopology
 from src.persistence import save_experiments
@@ -49,8 +49,12 @@ def _run_experiments_cached(
     inertia: float,
     num_points: int,
     n_swarm: int,
-    epsilon: float,
+    rtol: float,
+    atol: float,
+    patience: int,
     base_seed: int | None,
+    multi_seed_enabled: bool,
+    seed_count: int,
 ):
     """Cached version of experiments execution. Uses simple types for hashing."""
     input_data = PSOInputData(mean_return=mean_return, returns_matrix=returns_matrix)
@@ -65,8 +69,11 @@ def _run_experiments_cached(
         inertia=inertia,
         num_points=num_points,
         n_swarm=n_swarm,
-        epsilon=epsilon,
+        rtol=rtol,
+        atol=atol,
+        patience=patience,
         base_seed=base_seed,
+        seed_count=seed_count if multi_seed_enabled else 1,
     )
     return run_experiments(input_data=input_data, experiment_configs=configs)
 
@@ -83,8 +90,11 @@ def _build_experiment_configs(
     inertia: float,
     num_points: int,
     n_swarm: int,
-    epsilon: float,
+    rtol: float,
+    atol: float,
+    patience: int,
     base_seed: int | None,
+    seed_count: int = 1,
 ) -> list[ExperimentConfig]:
     configs: list[ExperimentConfig] = []
 
@@ -121,8 +131,11 @@ def _build_experiment_configs(
                 topology=topology,
                 num_points=num_points,
                 n_swarm=n_swarm,
-                epsilon=epsilon,
+                rtol=rtol,
+                atol=atol,
+                patience=patience,
                 seed=None if base_seed is None else base_seed + config_index,
+                seed_count=seed_count,
             )
         )
 
@@ -145,8 +158,12 @@ def run_analysis_pipeline(
     inertia: float,
     num_points: int,
     n_swarm: int,
-    epsilon: float,
+    rtol: float,
+    atol: float,
+    patience: int,
     base_seed: int | None,
+    multi_seed_enabled: bool = False,
+    seed_count: int = 1,
 ) -> AnalysisPipelineResult:
     if not assets:
         return AnalysisPipelineResult(validation_error="Select at least one asset.")
@@ -182,11 +199,16 @@ def run_analysis_pipeline(
             inertia=inertia,
             num_points=num_points,
             n_swarm=n_swarm,
-            epsilon=epsilon,
+            rtol=rtol,
+            atol=atol,
+            patience=patience,
             base_seed=base_seed,
+            multi_seed_enabled=multi_seed_enabled,
+            seed_count=seed_count,
         )
 
         metrics_by_config: dict[str, pd.DataFrame] = {}
+        seed_metrics_by_config: dict[str, pd.DataFrame] = {}
         for experiment in experiments:
             metrics_by_config[experiment.config.name] = build_metrics_dataframe(
                 returns_matrix=returns_matrix,
@@ -194,6 +216,12 @@ def run_analysis_pipeline(
                 cvar_alpha=alpha,
                 fitness_values=experiment.frontier.best_fitnesses,
             )
+            if experiment.frontier.seed_results:
+                seed_metrics_by_config[experiment.config.name] = build_seed_metrics_dataframe(
+                    returns_matrix=returns_matrix,
+                    seed_frontiers=experiment.frontier.seed_results,
+                    cvar_alpha=alpha,
+                )
 
         bt_returns_matrix = None
         bt_returns_index = None
@@ -221,6 +249,7 @@ def run_analysis_pipeline(
             returns_index=returns_index,
             experiments=experiments,
             metrics_by_config=metrics_by_config,
+            seed_metrics_by_config=seed_metrics_by_config,
             bt_returns_matrix=bt_returns_matrix,
             bt_returns_index=bt_returns_index,
         )

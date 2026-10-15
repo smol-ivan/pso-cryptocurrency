@@ -62,6 +62,31 @@ class BacktestingChartData:
     selected_indices: list[int]
 
 
+@dataclass
+class ConvergenceChartData:
+    convergence_history: np.ndarray
+    title: str
+
+
+@dataclass
+class ComparisonConvergenceChartData:
+    histories_by_config: dict[str, np.ndarray]
+    title: str = "Convergencia por configuración"
+
+
+@dataclass
+class MultiSeedConvergenceChartData:
+    histories_by_seed: dict[str, np.ndarray]
+    title: str
+
+
+@dataclass
+class MultiSeedFitnessChartData:
+    seed_metrics_by_config: dict[str, pd.DataFrame]
+    portfolio_index: int
+    title: str = "Variabilidad del fitness final entre semillas"
+
+
 def build_comparison_charts(data: ComparisonChartsData) -> go.Figure:
     return _build_experiment_comparison_figure(
         summary_df=data.summary_df,
@@ -123,6 +148,80 @@ def build_backtesting_chart(data: BacktestingChartData) -> go.Figure:
         weights=data.weights,
         selected_indices=data.selected_indices,
     )
+
+
+def build_convergence_chart(data: ConvergenceChartData) -> go.Figure:
+    return _build_convergence_figure(
+        convergence_history=data.convergence_history,
+        title=data.title,
+    )
+
+
+def build_comparison_convergence_chart(
+    data: ComparisonConvergenceChartData,
+) -> go.Figure:
+    return _build_comparison_convergence_figure(
+        histories_by_config=data.histories_by_config,
+        title=data.title,
+    )
+
+
+def build_multi_seed_convergence_chart(
+    data: MultiSeedConvergenceChartData,
+) -> go.Figure:
+    fig = go.Figure()
+    for seed, history in data.histories_by_seed.items():
+        fig.add_trace(
+            go.Scatter(
+                x=history[:, 0],
+                y=history[:, 1],
+                mode="lines",
+                name=seed,
+                hovertemplate="Iteración: %{x}<br>Fitness: %{y:.8f}<extra></extra>",
+            )
+        )
+    fig.update_layout(
+        title=data.title,
+        xaxis_title="Iteración",
+        yaxis_title="Fitness gbest",
+        hovermode="x unified",
+    )
+    return fig
+
+
+def build_multi_seed_fitness_chart(
+    data: MultiSeedFitnessChartData,
+) -> go.Figure:
+    fig = go.Figure()
+    for config_name, seed_metrics in data.seed_metrics_by_config.items():
+        point_metrics = seed_metrics[
+            seed_metrics["portfolio_index"] == data.portfolio_index
+        ]
+        fig.add_trace(
+            go.Box(
+                y=point_metrics["fitness"].to_numpy(),
+                name=config_name,
+                boxpoints="all",
+                jitter=0.35,
+                pointpos=0,
+                marker=dict(size=7, opacity=0.75),
+                line=dict(width=1.5),
+                hovertemplate=(
+                    "Configuración: " + config_name + "<br>"
+                    f"Portfolio {data.portfolio_index + 1}<br>"
+                    "Fitness final: %{y:.8f}<extra></extra>"
+                ),
+            )
+        )
+
+    fig.update_layout(
+        title=data.title,
+        xaxis_title="Configuración",
+        yaxis_title="Fitness final",
+        hovermode="closest",
+        showlegend=False,
+    )
+    return fig
 
 
 def _build_frontier_figure(
@@ -356,5 +455,57 @@ def _build_backtesting_returns_figure(
         yaxis_title="Retorno Acumulado (%)",
         hovermode="x unified",
         height=500,
+    )
+    return fig
+
+
+def _build_convergence_figure(
+    convergence_history: np.ndarray,
+    title: str,
+) -> go.Figure:
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=convergence_history[:, 0],
+            y=convergence_history[:, 1],
+            mode="lines+markers",
+            name="gbest",
+            hovertemplate="Iteración: %{x}<br>Fitness gbest: %{y:.6f}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        title=title,
+        xaxis_title="Iteración",
+        yaxis_title="Fitness gbest",
+        hovermode="x unified",
+    )
+    return fig
+
+
+def _build_comparison_convergence_figure(
+    histories_by_config: dict[str, np.ndarray],
+    title: str,
+) -> go.Figure:
+    fig = go.Figure()
+    for config_name, history in histories_by_config.items():
+        fig.add_trace(
+            go.Scatter(
+                x=history[:, 0],
+                y=history[:, 1],
+                mode="lines",
+                name=config_name,
+                hovertemplate=(
+                    f"Configuración: {config_name}<br>"
+                    "Iteración: %{x}<br>"
+                    "Fitness gbest: %{y:.6f}<extra></extra>"
+                ),
+            )
+        )
+    fig.update_layout(
+        title=title,
+        xaxis_title="Iteración",
+        yaxis_title="Fitness gbest",
+        hovermode="x unified",
+        legend_title_text="Configuración",
     )
     return fig

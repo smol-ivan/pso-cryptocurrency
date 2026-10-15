@@ -1,10 +1,16 @@
 import pandas as pd
+import numpy as np
 import streamlit as st
 
 from src.experiments import ExperimentResult
 from datetime import datetime
 
-from src.finance import annualized_return, build_weights_table, spaced_frontier_indices
+from src.finance import (
+    annualized_return,
+    build_seed_statistics_dataframe,
+    build_weights_table,
+    spaced_frontier_indices,
+)
 from src.models.state import ExperimentsPayload
 from src.ui import charts
 from src.ui.colors import get_crypto_colors
@@ -38,6 +44,104 @@ def render_analysis_tab(
         )
     )
     st.plotly_chart(fig_frontier, width="stretch")
+
+    convergence_histories = selected_experiment.frontier.convergence_histories
+    selected_seed_portfolio_index = 0
+    if convergence_histories:
+        st.subheader("Convergencia")
+        convergence_index = st.selectbox(
+            "Portfolio para la convergencia",
+            options=list(range(len(convergence_histories))),
+            format_func=lambda idx: f"Portfolio {idx + 1}",
+            key=f"convergence_portfolio_{selected_config}",
+        )
+        selected_seed_portfolio_index = convergence_index
+        fig_convergence = charts.build_convergence_chart(
+            charts.ConvergenceChartData(
+                convergence_history=convergence_histories[convergence_index],
+                title=f"Convergencia - {selected_config} - Portfolio {convergence_index + 1}",
+            )
+        )
+        st.plotly_chart(fig_convergence, width="stretch")
+
+    seed_metrics = (payload.seed_metrics_by_config or {}).get(selected_config)
+    seed_frontiers = selected_experiment.frontier.seed_results
+    if seed_metrics is not None and seed_frontiers:
+        st.subheader("Variabilidad entre semillas")
+        if not convergence_histories:
+            selected_seed_portfolio_index = st.selectbox(
+                "Portfolio para analizar variabilidad",
+                options=list(range(len(selected_experiment.frontier.weights))),
+                format_func=lambda idx: f"Portfolio {idx + 1}",
+                key=f"seed_variability_portfolio_{selected_config}",
+            )
+        selected_point_metrics = seed_metrics[
+            seed_metrics["portfolio_index"] == selected_seed_portfolio_index
+        ]
+        fig_seed_fitness = charts.build_multi_seed_fitness_chart(
+            charts.MultiSeedFitnessChartData(
+                seed_metrics_by_config={selected_config: seed_metrics},
+                portfolio_index=selected_seed_portfolio_index,
+                title=(
+                    f"Variabilidad - {selected_config} - "
+                    f"Portfolio {selected_seed_portfolio_index + 1}"
+                ),
+            )
+        )
+        st.plotly_chart(fig_seed_fitness, width="stretch")
+        fitness_values = selected_point_metrics["fitness"].to_numpy()
+        fitness_mean = float(np.mean(fitness_values))
+        if np.isclose(fitness_mean, 0.0):
+            dispersion_label = "No disponible (media ≈ 0)"
+        else:
+            relative_dispersion = (
+                (float(np.max(fitness_values)) - float(np.min(fitness_values)))
+                / fitness_mean
+            )
+            dispersion_label = f"{relative_dispersion * 100:.2f}%"
+        st.metric(
+            "Dispersión relativa del fitness",
+            dispersion_label,
+            help="(máximo - mínimo) / |media| para las semillas del punto seleccionado.",
+        )
+
+    if seed_metrics is not None and seed_frontiers:
+        st.caption(
+            f"{len(seed_frontiers)} semillas por configuración; la semilla base se incrementa "
+            "consecutivamente para cada réplica."
+        )
+        seed_stats = build_seed_statistics_dataframe(seed_metrics)
+        display_stats = seed_stats.copy()
+        display_stats.insert(0, "portfolio", display_stats.pop("portfolio_index") + 1)
+        with st.expander("Ver estadísticas detalladas", expanded=False):
+            st.dataframe(display_stats, width="stretch")
+
+        with st.expander("Ver convergencia por semilla", expanded=False):
+            seed_options = list(range(len(seed_frontiers)))
+            histories_by_seed = {
+                f"Semilla {seed if seed is not None else index + 1}": frontier.convergence_histories[
+                    selected_seed_portfolio_index
+                ]
+                for index, (seed, frontier) in enumerate(
+                    zip(
+                        selected_experiment.frontier.seed_values or seed_options,
+                        seed_frontiers,
+                    )
+                )
+                if frontier.convergence_histories
+                and selected_seed_portfolio_index < len(frontier.convergence_histories)
+            }
+            if histories_by_seed:
+                fig_seed_convergence = charts.build_multi_seed_convergence_chart(
+                    charts.MultiSeedConvergenceChartData(
+                        histories_by_seed=histories_by_seed,
+                        title=(
+                            "Convergencia entre semillas - Portfolio "
+                            f"{selected_seed_portfolio_index + 1}"
+                        ),
+                    )
+                )
+                st.plotly_chart(fig_seed_convergence, width="stretch")
 
     bt_returns_matrix = payload.bt_returns_matrix
     bt_returns_index = payload.bt_returns_index

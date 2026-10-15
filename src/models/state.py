@@ -17,6 +17,7 @@ class ExperimentsPayload:
     returns_index: pd.Index
     experiments: list[ExperimentResult]
     metrics_by_config: dict[str, pd.DataFrame]
+    seed_metrics_by_config: dict[str, pd.DataFrame] | None = None
     bt_returns_matrix: np.ndarray | None = None
     bt_returns_index: pd.Index | None = None
 
@@ -32,6 +33,7 @@ class ExperimentsPayload:
             returns_index=payload["returns_index"],
             experiments=payload["experiments"],
             metrics_by_config=payload["metrics_by_config"],
+            seed_metrics_by_config=payload.get("seed_metrics_by_config", {}),
             bt_returns_matrix=payload.get("bt_returns_matrix"),
             bt_returns_index=payload.get("bt_returns_index"),
         )
