@@ -26,11 +26,23 @@ def calculate_portfolio_metrics(
     tail_losses = portfolio_returns[portfolio_returns <= var_threshold]
     cvar = float(-tail_losses.mean())
 
+    # VaR: convert percentile threshold to positive risk number
+    var = float(-var_threshold)
+
+    # Variance and semivariance
+    variance = float(portfolio_returns.var())
+    expected_return = portfolio_returns.mean()
+    negative_dev = portfolio_returns[portfolio_returns < expected_return] - expected_return
+    semivariance = float(np.mean(negative_dev ** 2)) if negative_dev.size > 0 else 0.0
+
     sharpe_ratio = mean_return / volatility if volatility > 0 else 0.0
 
     return {
         "mean_return": mean_return,
         "cvar": cvar,
+        "var": var,
+        "variance": variance,
+        "semivariance": semivariance,
         "max_drawdown": max_drawdown(portfolio_returns),
         "volatility": volatility,
         "sharpe_ratio": sharpe_ratio,
@@ -51,6 +63,51 @@ def build_metrics_dataframe(
     if fitness_values is not None:
         df_metrics["fitness"] = fitness_values
     return df_metrics
+
+
+def build_seed_metrics_dataframe(
+    returns_matrix: np.ndarray,
+    seed_frontiers: list,
+    cvar_alpha: float,
+) -> pd.DataFrame:
+    rows: list[dict[str, float | int]] = []
+    for seed_index, frontier in enumerate(seed_frontiers):
+        metrics = build_metrics_dataframe(
+            returns_matrix=returns_matrix,
+            weights_list=frontier.weights,
+            cvar_alpha=cvar_alpha,
+            fitness_values=frontier.best_fitnesses,
+        )
+        metrics.insert(0, "seed_index", seed_index)
+        metrics.insert(1, "portfolio_index", np.arange(len(metrics)))
+        metrics.insert(2, "target_return", frontier.target_values)
+        rows.extend(metrics.to_dict("records"))
+    return pd.DataFrame(rows)
+
+
+def build_seed_statistics_dataframe(seed_metrics: pd.DataFrame) -> pd.DataFrame:
+    if seed_metrics.empty:
+        return pd.DataFrame()
+
+    metric_columns = [
+        "fitness",
+        "mean_return",
+        "volatility",
+        "variance",
+        "cvar",
+        "var",
+        "semivariance",
+        "max_drawdown",
+        "sharpe_ratio",
+    ]
+    grouped = seed_metrics.groupby("portfolio_index")[metric_columns].agg(
+        ["mean", "std", "min", "max"]
+    )
+    grouped.columns = [f"{metric}_{stat}" for metric, stat in grouped.columns]
+    target_returns = seed_metrics.groupby("portfolio_index")["target_return"].first()
+    result = grouped.reset_index()
+    result.insert(1, "target_return", result["portfolio_index"].map(target_returns))
+    return result
 
 
 def build_summary_dataframe(

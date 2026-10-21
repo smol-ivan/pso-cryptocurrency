@@ -2,10 +2,10 @@ from typing import List
 
 import numpy as np
 
-from .models.fitness_function import FitnessFunction
-from .models.particle import Particle
-from .models.topology import Topology
-from .models.velocity_model import VelocityModel
+from .fitness_function import FitnessFunction
+from .particle import Particle
+from .topology import Topology
+from .velocity_model import VelocityModel
 
 
 def initialize_swarm(
@@ -34,15 +34,18 @@ def pso(
     fitness_function: FitnessFunction,
     velocity_model: VelocityModel,
     topology: Topology,
-    epsilon: float = 1e-4,
+    rtol: float = 1e-4,
+    atol: float = 1e-8,
+    patience: int = 10,
     max_iterations: int = 1000,
 ):
     """
     PSO with early stopping on convergence.
     
     Args:
-        epsilon: Improvement threshold for convergence detection.
-                Default 1e-4 means "stop if improvement < 0.01% per iteration"
+        rtol: Relative improvement threshold for convergence detection.
+        atol: Absolute improvement threshold for convergence detection.
+        patience: Consecutive iterations below the tolerance before stopping.
         max_iterations: Maximum number of iterations before stopping.
     """
     swarm = initialize_swarm(
@@ -56,6 +59,9 @@ def pso(
     best_global_position = best_initial_particle.best_pos.copy()
     best_global_value = best_initial_particle.best_val
     prev_best_value = best_global_value
+    convergence_history: list[tuple[int, float]] = []
+    diversity_history = [_swarm_diversity(swarm)]
+    convergence_wait = 0
 
     for iteration in range(max_iterations):
         for idx, particle in enumerate(swarm):
@@ -74,11 +80,31 @@ def pso(
             best_global_position = best_iteration_particle.best_pos.copy()
             best_global_value = best_iteration_particle.best_val
 
+        convergence_history.append((iteration, best_global_value))
+        diversity_history.append(_swarm_diversity(swarm))
+
         # Convergencia temprana
         improvement = abs(best_global_value - prev_best_value)
-        if improvement < epsilon and iteration > 5:
-            break
+        tolerance = atol + rtol * abs(best_global_value)
+        if iteration > 5 and improvement < tolerance:
+            convergence_wait += 1
+            if convergence_wait >= patience:
+                break
+        else:
+            convergence_wait = 0
         
         prev_best_value = best_global_value
 
-    return best_global_value, best_global_position
+    return (
+        best_global_value,
+        best_global_position,
+        np.asarray(convergence_history, dtype=float),
+        np.asarray(diversity_history, dtype=float),
+    )
+
+
+def _swarm_diversity(swarm: list[Particle]) -> float:
+    positions = np.asarray([particle.position for particle in swarm])
+    centroid = positions.mean(axis=0)
+    distances = np.linalg.norm(positions - centroid, axis=1)
+    return float(distances.mean())
