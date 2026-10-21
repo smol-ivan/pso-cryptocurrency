@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import random
 
 import numpy as np
 
@@ -41,7 +42,11 @@ def run_experiments(
         for seed_index in range(seed_count):
             seed = config.seed + seed_index if config.seed is not None else None
             if seed is not None:
-                np.random.seed(seed)
+                random_generator = np.random.default_rng(seed)
+                python_random_generator = random.Random(seed)
+            else:
+                random_generator = np.random.default_rng()
+                python_random_generator = random.Random()
             seed_results.append(
                 run_pso(
                     input_data=input_data,
@@ -53,6 +58,8 @@ def run_experiments(
                     fitness_function=config.fitness_function,
                     velocity_model=config.velocity_model,
                     topology=config.topology,
+                    random_generator=random_generator,
+                    python_random_generator=python_random_generator,
                 )
             )
             seed_values.append(seed)

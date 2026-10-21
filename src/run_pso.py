@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import random
 
 import numpy as np
 
@@ -43,6 +44,8 @@ def run_pso(
     fitness_function: FitnessFunction | None = None,
     velocity_model: VelocityModel | None = None,
     topology: Topology | None = None,
+    random_generator: np.random.Generator | None = None,
+    python_random_generator: random.Random | None = None,
 ) -> EfficientFrontier:
     if not fitness_function or not velocity_model or not topology:
         fitness_function = CVaR()
@@ -80,6 +83,8 @@ def run_pso(
                 rtol=rtol,
                 atol=atol,
                 patience=patience,
+                random_generator=random_generator,
+                python_random_generator=python_random_generator,
                 )
 
         weights_list.append(best_position.copy())

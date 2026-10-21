@@ -81,6 +81,25 @@ dependientes.
   semilla de experimento controla NumPy y `random`; quedan fuera de PSO-01 las
   convenciones financieras y la instrumentación de convergencia.
 
+#### PSO-01.1 — Cerrar brechas de reproducibilidad y cobertura
+- **Objetivo:** aislar los generadores aleatorios y ampliar las pruebas de
+  invariantes identificadas en la revisión independiente de PSO-01.
+- **Justificación:** las semillas de PSO-01 modificaban el estado global y la
+  cobertura automatizada no incluía ambos modelos, orden de configuraciones ni
+  las réplicas trazables.
+- **Incluye:** generadores locales inyectados, pruebas de aislamiento, orden,
+  réplicas, ambos modelos, dimensión unitaria y reparación.
+- **Excluye:** función objetivo, ecuaciones, parámetros, topologías, parada,
+  interfaz, métricas financieras y PSO-02.
+- **Dependencias:** PSO-01 implementada y PSO-01-R aprobada.
+- **Aceptación:** reproducibilidad aislada, semillas trazables, cobertura
+  focalizada y reporte con limitaciones reales.
+- **Evidencia:** `reports/PSO-01.1-reproducibility-coverage.md`.
+- **Reporte esperado:** `reports/PSO-01.1-reproducibility-coverage.md`.
+- **Estado:** implementada; revisión independiente pendiente.
+- **Riesgos/decisiones:** la secuencia aleatoria de resultados puede cambiar
+  respecto de PSO-01; la compatibilidad se define dentro de esta versión.
+
 ### Fase 2 — Diagnóstico de convergencia
 
 #### PSO-02 — Instrumentar la convergencia
@@ -89,7 +108,7 @@ dependientes.
   convergencia, colapso o tolerancia.
 - **Incluye:** instrumentación y pruebas de trazas.
 - **Excluye:** cambiar la función objetivo, dinámica, tolerancias o criterio.
-- **Dependencias:** PSO-01 implementada y revisada.
+- **Dependencias:** PSO-01 y PSO-01.1 implementadas y revisadas.
 - **Aceptación:** historial documentado con gbest, fitness poblacional,
   diversidad, tolerancia, paciencia, iteración final y motivo; compatibilidad
   o migración explícita de `.psodata`.

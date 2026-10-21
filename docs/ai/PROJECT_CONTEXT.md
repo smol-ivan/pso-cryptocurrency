@@ -65,9 +65,9 @@ imputación, sesgo de supervivencia o zona horaria.
 ## Representación y restricciones observadas
 
 Una partícula contiene un vector de pesos, un vector de velocidad, `best_pos` y
-`best_val`. La inicialización usa `np.random.rand()` y normaliza posiciones.
-Los modelos de velocidad recortan componentes negativas y normalizan si la
-suma resultante es positiva.
+`best_val`. La inicialización usa un `np.random.Generator` local y normaliza
+posiciones. Los modelos de velocidad recortan componentes negativas y
+normalizan si la suma resultante es positiva.
 
 La intención observable es:
 
@@ -117,9 +117,10 @@ se selecciona una frecuencia semanal o mensual.
 
 ## Aleatoriedad y persistencia
 
-`run_experiments()` fija `np.random.seed(seed)`, mientras que los modelos de
-velocidad usan `random.random()`. El reporte histórico documenta que la semilla
-declarada no controla toda la trayectoria. La persistencia `.psodata` conserva
+Las ejecuciones PSO usan generadores locales: `np.random.Generator` para las
+posiciones iniciales y `random.Random` inyectado en los modelos de velocidad.
+`run_experiments()` deriva `seed + seed_index` para cada réplica y no modifica
+los estados globales de NumPy ni de Python. La persistencia `.psodata` conserva
 arrays, tablas, configuraciones, pesos e historiales de convergencia; la
 diversidad se calcula, pero el reporte histórico indica que no se serializa.
 
@@ -128,10 +129,11 @@ diversidad se calcula, pero el reporte histórico indica que no se serializa.
 ### Hechos respaldados por código o reportes
 
 - La aplicación y el flujo modular descritos arriba existen.
-- No hay directorio de pruebas automatizadas ni configuración declarada de
-  pytest, Ruff, mypy o cobertura.
-- La reproducibilidad completa con la semilla actual no está garantizada.
-- La reparación puede producir una posición nula.
+- Existe `tests/test_pso01.py` con pruebas focalizadas; no hay configuración
+  declarada de pytest, Ruff, mypy o cobertura.
+- Las ejecuciones sembradas son reproducibles dentro de la versión actual y
+  no contaminan los RNG globales.
+- La política de reparación uniforme evita posiciones nulas.
 - La auditoría histórica registró sondeos locales, pero no experimentos
   financieros nuevos en esta preparación.
 
@@ -146,8 +148,10 @@ diversidad se calcula, pero el reporte histórico indica que no se serializa.
 
 ### Cuestiones pendientes
 
-- Contrato de reproducibilidad y generador aleatorio único.
-- Política para posiciones nulas, entradas no finitas y dimensiones inválidas.
+- Compatibilidad explícita de resultados con versiones anteriores tras el
+  cambio de secuencias aleatorias.
+- Cobertura futura de parámetros de fitness, persistencia y rutas fuera de
+  PSO-01.1.
 - Instrumentación del motivo de parada y estadísticas por generación.
 - Comparación contra funciones sintéticas y mínima varianza long-only.
 - Convenciones de retornos, anualización, VaR/CVaR, drawdown y backtesting.
