@@ -96,9 +96,12 @@ dependientes.
   focalizada y reporte con limitaciones reales.
 - **Evidencia:** `reports/PSO-01.1-reproducibility-coverage.md`.
 - **Reporte esperado:** `reports/PSO-01.1-reproducibility-coverage.md`.
-- **Estado:** implementada; revisión independiente pendiente.
+- **Estado:** implementada; revisión independiente aprobada con observaciones.
+- **Evidencia de revisión:** `reports/PSO-01.1-R-independent-review.md`.
 - **Riesgos/decisiones:** la secuencia aleatoria de resultados puede cambiar
   respecto de PSO-01; la compatibilidad se define dentro de esta versión.
+  La revisión observó brechas menores de aserciones sobre diversidad y
+  reproducibilidad explícita de `Constriction`, sin bloquear PSO-02.
 
 ### Fase 2 — Diagnóstico de convergencia
 
@@ -114,9 +117,45 @@ dependientes.
   o migración explícita de `.psodata`.
 - **Evidencia:** pruebas de forma/monotonicidad y ejemplo reproducible.
 - **Reporte esperado:** `reports/PSO-02-convergence-diagnostics.md`.
-- **Estado:** pendiente.
-- **Riesgos/decisiones:** decidir qué formato persistir y cómo tratar archivos
-  históricos sin diversidad.
+- **Estado:** implementada; revisión independiente aprobada con observaciones.
+- **Evidencia:** `reports/PSO-02-convergence-diagnostics.md`,
+  `reports/PSO-02-R-independent-review.md`, `tests/test_pso02.py`, trazas
+  agregadas en `EfficientFrontier` y esquema `.psodata` versión 1.
+- **Riesgos/decisiones:** la revisión confirmó la instrumentación y la
+  compatibilidad actual, pero observó que `max_iterations` no forma parte del
+  contrato efectivo de `ExperimentConfig`, que faltan algunos casos no nulos
+  en la suite automatizada y que el experimento inicial solo permite
+  conclusiones diagnósticas. PSO-03 puede avanzar sin tratar estos resultados
+  como prueba de optimalidad; las mejoras de contrato/cobertura quedan
+  pendientes.
+
+#### PSO-02.5-R — Revisar targets, inicialización y conclusiones matemáticas
+- **Objetivo:** revisar críticamente la construcción de targets, la convención
+  de generación 0, el colapso del enjambre y la afirmación de mínimo global
+  de la evidencia PSO-02.5.
+- **Justificación:** el historial distingue el estado inicial de la primera
+  generación registrada y la optimalidad penalizada no puede inferirse de
+  corridas del PSO; además, los diagnósticos previos usaron tanto `penalty=50`
+  como `penalty=500`.
+- **Incluye:** inspección de código, artefactos, semillas, matrices, targets,
+  inicialización, reparación, descomposición y comprobaciones finitas
+  reproducibles.
+- **Excluye:** cambios de función objetivo/dinámica/interfaz, solvers externos,
+  búsqueda amplia de parámetros y PSO-03.
+- **Dependencias:** PSO-02 implementada y revisada; PSO-03 permanece pendiente.
+- **Aceptación:** reporte con evidencia de targets y procedencia, convención de
+  historial, reproducción de generación 0, distinción entre factibilidad y
+  optimalidad, comandos reales y limitaciones.
+- **Evidencia:** `reports/PSO-02.5-R-target-and-initialization-review.md`.
+- **Reporte esperado:** `reports/PSO-02.5-R-target-and-initialization-review.md`.
+- **Estado:** revisada con observaciones.
+- **Evidencia de revisión:** `reports/PSO-02.5-R-independent-review.md`.
+- **Riesgos/decisiones:** el target bajo es el mínimo de medias y puede ser
+  negativo por la muestra sintética; el vértice alcanza exactamente ese target
+  y aparece tras la primera actualización, pero su mínimo global penalizado no
+  está demostrado. La discrepancia histórica de diversidad/movimiento queda
+  parcialmente explicada por cambios de RNG/configuración, sin atribución
+  única. No habilita PSO-03 por sí sola.
 
 ### Fase 3 — Validación matemática y comparación independiente
 
@@ -133,7 +172,23 @@ dependientes.
   óptimo conocido, factibilidad, gap relativo, variabilidad y limitaciones.
 - **Evidencia:** pruebas/experimentos y reporte reproducibles.
 - **Reporte esperado:** `reports/PSO-03-reference-validation.md`.
-- **Estado:** pendiente.
+- **Estado:** revisada con observaciones.
+- **Evidencia:** `tests/test_pso03.py`, `reports/PSO-03-reference-validation.md`,
+  `reports/PSO-03-R-independent-review.md`.
+- **Evidencia de revisión:** `reports/PSO-03-R-independent-review.md`.
+- **Resultado:** se validaron Sphere sobre el simplex, CVaR mediante casos
+  manuales, y mínima varianza long-only contra una referencia independiente en
+  cinco semillas. La configuración de Streamlit se verificó para Ring/Global
+  con 30 puntos, 100 partículas, CVaR `alpha=0.95`, penalty `500`,
+  `rtol=1e-4`, `atol=1e-8`, paciencia 10, Inertia (`c1=c2=1.7`, `w=0.8`) y
+  una semilla por configuración.
+- **Limitaciones:** `max_iterations` no forma parte de `ExperimentConfig` ni
+  del flujo de Streamlit y queda implícito en `pso()` como 1000; no se
+  certificó el óptimo global del CVaR penalizado ni se ejecutaron datos de
+  mercado. La revisión independiente clasificó la omisión de
+  `max_iterations` como observación de severidad media; no bloquea la
+  evidencia sintética, pero debe resolverse antes de exigir reproducibilidad
+  completa desde metadatos.
 - **Riesgos/decisiones:** aprobar si el harness usa fitness pura de prueba o la
   formulación penalizada actual; definir umbrales y solver permitido.
 
@@ -149,7 +204,15 @@ dependientes.
 - **Aceptación:** fórmulas, casos conocidos, frecuencia y signos documentados.
 - **Evidencia:** pruebas y reporte.
 - **Reporte esperado:** `reports/PSO-04-financial-conventions.md`.
-- **Estado:** pendiente.
+- **Estado:** revisada con observaciones.
+- **Evidencia:** `tests/test_pso04.py`,
+  `reports/PSO-04-financial-conventions.md` y
+  `reports/PSO-04-R-independent-review.md`.
+- **Resultado:** las fórmulas implementadas, VaR/CVaR, signos, frecuencia
+  transmitida y correcciones declaradas fueron verificadas. Se mantienen
+  observaciones medias sobre la interpretación de drawdown con log-retornos y
+  sobre la anualización de medias por observación con factor 252; no se cambió
+  producción ni se aprobó una convención financiera alternativa.
 - **Riesgos/decisiones:** decidir la semántica académica de CVaR y drawdown.
 
 #### PSO-05 — Revisar el backtesting

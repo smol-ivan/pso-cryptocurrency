@@ -10,6 +10,7 @@ if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.pso import CVaR, FitnessFunction, Inertia, RingTopology, Topology, VelocityModel, pso
+from src.pso.optimizer import ConvergenceTrace
 
 
 @dataclass
@@ -21,6 +22,7 @@ class EfficientFrontier:
     best_fitnesses: np.ndarray
     convergence_histories: list[np.ndarray] | None = None
     diversity_histories: list[np.ndarray] | None = None
+    diagnostic_histories: list[ConvergenceTrace] | None = None
     seed_results: list["EfficientFrontier"] | None = None
     seed_values: list[int | None] | None = None
 
@@ -63,6 +65,7 @@ def run_pso(
     fitnesses_list = []
     convergence_histories = []
     diversity_histories = []
+    diagnostic_histories = []
 
     # Run pso for each point
     print(f"Ejecutando {num_points} optimizaciones PSO...")
@@ -73,6 +76,7 @@ def run_pso(
             best_position,
             convergence_history,
             diversity_history,
+            diagnostic_history,
         ) = pso(
                 returns_matrix=input_data.returns_matrix,
                 swarm_size=n_swarm,
@@ -85,12 +89,14 @@ def run_pso(
                 patience=patience,
                 random_generator=random_generator,
                 python_random_generator=python_random_generator,
+                return_diagnostics=True,
                 )
 
         weights_list.append(best_position.copy())
         fitnesses_list.append(best_fitness)
         convergence_histories.append(convergence_history)
         diversity_histories.append(diversity_history)
+        diagnostic_histories.append(diagnostic_history)
 
     return EfficientFrontier(
         target_values=target_values,
@@ -98,4 +104,5 @@ def run_pso(
         best_fitnesses=np.array(fitnesses_list),
         convergence_histories=convergence_histories,
         diversity_histories=diversity_histories,
+        diagnostic_histories=diagnostic_histories,
     )

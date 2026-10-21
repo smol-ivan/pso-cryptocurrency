@@ -9,6 +9,7 @@ from .particle import Particle
 class VelocityModel(ABC):
     def __init__(self, random_generator: Random | None = None) -> None:
         self._random_generator = random_generator or Random()
+        self.last_repaired = False
 
     def set_random_generator(self, random_generator: Random) -> None:
         self._random_generator = random_generator
@@ -19,7 +20,7 @@ class VelocityModel(ABC):
         pass
 
 
-def _repair_position(position: np.ndarray) -> np.ndarray:
+def _repair_position(position: np.ndarray) -> tuple[np.ndarray, bool]:
     position = np.asarray(position, dtype=float)
     if position.ndim != 1 or position.size == 0:
         raise ValueError("Position must be a non-empty one-dimensional vector.")
@@ -29,8 +30,10 @@ def _repair_position(position: np.ndarray) -> np.ndarray:
     repaired = np.maximum(0, position)
     total_weight = np.sum(repaired)
     if total_weight > 0:
-        return repaired / total_weight
-    return np.full(position.shape, 1.0 / position.size, dtype=float)
+        normalized = repaired / total_weight
+    else:
+        normalized = np.full(position.shape, 1.0 / position.size, dtype=float)
+    return normalized, not np.array_equal(normalized, position)
 
 
 class Inertia(VelocityModel):
@@ -50,7 +53,9 @@ class Inertia(VelocityModel):
         )
 
         particle.velocity = new_velocity
-        particle.position = _repair_position(particle.position + particle.velocity)
+        particle.position, self.last_repaired = _repair_position(
+            particle.position + particle.velocity
+        )
 
 
 class Constriction(VelocityModel):
@@ -70,4 +75,6 @@ class Constriction(VelocityModel):
         new_velocity = self.chi * (particle.velocity + cognitive + social)
 
         particle.velocity = new_velocity
-        particle.position = _repair_position(particle.position + particle.velocity)
+        particle.position, self.last_repaired = _repair_position(
+            particle.position + particle.velocity
+        )

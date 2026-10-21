@@ -1,5 +1,5 @@
 from .fitness_function import CVaR, VaR, Variance, Semivariance, FitnessFunction, MaxDrawdown
-from .optimizer import pso
+from .optimizer import ConvergenceTrace, pso
 from .topology import GlobalTopology, RingTopology, Topology
 from .velocity_model import Constriction, Inertia, VelocityModel
 

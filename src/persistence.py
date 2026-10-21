@@ -10,6 +10,7 @@ import pandas as pd
 from src.models.state import ExperimentsPayload
 from src.experiments import ExperimentConfig, ExperimentResult
 from src.run_pso import EfficientFrontier
+from src.pso.optimizer import ConvergenceTrace
 
 ARTIFACTS_DIR = Path("artifacts")
 EXPERIMENTS_FILE = ARTIFACTS_DIR / "experiments.psodata"
@@ -28,6 +29,13 @@ def _isoify(value: Any) -> Any:
 
 
 def _serialize_config(config: ExperimentConfig) -> dict:
+    def public_attributes(value: Any) -> dict[str, Any]:
+        return {
+            key: item
+            for key, item in vars(value).items()
+            if not key.startswith("_") and key != "last_repaired"
+        }
+
     return {
         "name": config.name,
         "objective_name": config.objective_name,
@@ -40,9 +48,18 @@ def _serialize_config(config: ExperimentConfig) -> dict:
         "patience": config.patience,
         "seed": config.seed,
         "seed_count": config.seed_count,
-        "fitness_function": {"__class__": config.fitness_function.__class__.__name__, **vars(config.fitness_function)},
-        "velocity_model": {"__class__": config.velocity_model.__class__.__name__, **vars(config.velocity_model)},
-        "topology": {"__class__": config.topology.__class__.__name__, **vars(config.topology)},
+        "fitness_function": {
+            "__class__": config.fitness_function.__class__.__name__,
+            **public_attributes(config.fitness_function),
+        },
+        "velocity_model": {
+            "__class__": config.velocity_model.__class__.__name__,
+            **public_attributes(config.velocity_model),
+        },
+        "topology": {
+            "__class__": config.topology.__class__.__name__,
+            **public_attributes(config.topology),
+        },
     }
 
 
@@ -116,6 +133,7 @@ def export_payload_to_bytes(payload: dict) -> bytes:
     bio = io.BytesIO()
     with zipfile.ZipFile(bio, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
         metadata: dict[str, Any] = {}
+        metadata["diagnostics_schema_version"] = 1
 
         # Simple fields
         for key in ("assets", "start_date", "end_date", "interval", "alpha"):
@@ -215,6 +233,12 @@ def export_payload_to_bytes(payload: dict) -> bytes:
                         stacked = np.vstack(frontier_data.weights)
                         np.save(buf, stacked, allow_pickle=False)
                         zf.writestr(f"{base}/weights.npy", buf.getvalue())
+                    if getattr(frontier_data, "diagnostic_histories", None) is not None:
+                        for point_index, trace in enumerate(frontier_data.diagnostic_histories):
+                            zf.writestr(
+                                f"{base}/diagnostics_{point_index}.json",
+                                json.dumps(trace.to_dict()),
+                            )
 
                 write_frontier(frontier, fr_base)
                 seed_frontiers = getattr(frontier, "seed_results", None)
@@ -300,6 +324,7 @@ def import_payload_from_bytes(data: bytes) -> dict:
                 best = None
                 weights = None
                 convergence_histories: list[np.ndarray] = []
+                diagnostic_histories: list[ConvergenceTrace] = []
                 try:
                     target = np.load(io.BytesIO(zf.read(f"{base}/target_values.npy")), allow_pickle=False)
                 except KeyError:
@@ -313,6 +338,17 @@ def import_payload_from_bytes(data: bytes) -> dict:
                     try:
                         convergence_histories.append(
                             np.load(io.BytesIO(zf.read(f"{base}/convergence_{point_index}.npy")), allow_pickle=False)
+                        )
+                    except KeyError:
+                        break
+                    point_index += 1
+                point_index = 0
+                while True:
+                    try:
+                        diagnostic_histories.append(
+                            ConvergenceTrace.from_dict(
+                                json.loads(zf.read(f"{base}/diagnostics_{point_index}.json"))
+                            )
                         )
                     except KeyError:
                         break
@@ -333,6 +369,7 @@ def import_payload_from_bytes(data: bytes) -> dict:
                     weights=weights,
                     best_fitnesses=best,
                     convergence_histories=convergence_histories or None,
+                    diagnostic_histories=diagnostic_histories or None,
                 )
 
             frontier = read_frontier(fr_base)
