@@ -6,7 +6,12 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from validation_dashboard_logic import run_validation_suite
+from validation_dashboard_logic import (
+    MARKET_PENALTY,
+    evaluate_extreme_cases,
+    run_market_diagnostic,
+    run_validation_suite,
+)
 
 
 def _render_status(label: str, passed: bool) -> None:
@@ -24,6 +29,16 @@ def _execute_validation() -> bool:
         st.session_state["validation_results"] = run_validation_suite()
     except Exception as error:
         st.error(f"No se pudo completar la validación: {error}")
+        return False
+    return True
+
+
+def _execute_market_diagnostic() -> bool:
+    st.session_state["market_diagnostic_results"] = None
+    try:
+        st.session_state["market_diagnostic_results"] = run_market_diagnostic()
+    except Exception as error:
+        st.error(f"No se pudo completar el diagnóstico de mercado: {error}")
         return False
     return True
 
@@ -47,6 +62,117 @@ def _render_convergence(results: dict) -> None:
         legend_title="Topología",
     )
     st.plotly_chart(figure, use_container_width=True)
+
+
+def _render_market_diagnostic(results: dict) -> None:
+    st.subheader("Metadatos efectivos")
+    st.write(
+        {
+            "Activos": ", ".join(results["assets"]),
+            "Período solicitado": f"{results['requested_start']} → {results['requested_end']}",
+            "Período disponible": f"{results['available_start']} → {results['available_end']}",
+            "Observaciones": results["observations"],
+            "Intervalo": results["interval"],
+            "Recuperado (UTC)": results["retrieved_at"],
+            "Semillas": results["seeds"],
+            "Penalización": MARKET_PENALTY,
+            "Target mínimo": results["target_values"]["minimum"],
+            "Target intermedio": results["target_values"]["intermediate"],
+        }
+    )
+    st.caption(
+        "Se ejecutan dos targets sobre la misma matriz: el mínimo de las medias "
+        "por activo y un punto intermedio entre la media mínima y máxima. La "
+        "aplicación principal usa 30 puntos de frontera; estos dos puntos se "
+        "seleccionan para contrastar un extremo y un caso intermedio. Los "
+        "retornos son logarítmicos por observación."
+    )
+
+    target_name = st.selectbox(
+        "Objetivo de retorno",
+        ["minimum", "intermediate"],
+        format_func=lambda value: {
+            "minimum": "Mínimo de las medias por activo",
+            "intermediate": "Intermedio entre mínimo y máximo",
+        }[value],
+    )
+    runs = results["runs"][target_name]
+    selected_topology = st.selectbox("Topología de mercado", ["Ring", "Global"])
+    selected_seed = st.selectbox("Semilla de mercado", list(results["seeds"]))
+    run = next(item for item in runs[selected_topology] if item["seed"] == selected_seed)
+
+    convergence = go.Figure()
+    convergence.add_trace(go.Scatter(x=run["iterations"], y=run["gbest"], mode="lines"))
+    convergence.update_layout(
+        title="Convergencia: mejor fitness global",
+        xaxis_title="Iteración registrada (posterior al movimiento)",
+        yaxis_title="Fitness CVaR + penalización (menor es mejor)",
+    )
+    st.plotly_chart(convergence, use_container_width=True)
+
+    population = go.Figure()
+    population.add_trace(go.Scatter(x=run["iterations"], y=run["diversity"], name="Diversidad"))
+    population.add_trace(go.Scatter(x=run["iterations"], y=run["movement_mean"], name="Movimiento medio"))
+    population.update_layout(
+        title="Diversidad y movimiento",
+        xaxis_title="Iteración registrada",
+        yaxis_title="Magnitud euclídea en pesos",
+    )
+    st.plotly_chart(population, use_container_width=True)
+
+    gap = go.Figure()
+    gap.add_trace(
+        go.Scatter(
+            x=run["iterations"],
+            y=run["target_gap_history"],
+            name="Brecha absoluta",
+        )
+    )
+    gap.update_layout(title="Brecha al objetivo", xaxis_title="Iteración registrada")
+    st.plotly_chart(gap, use_container_width=True)
+
+    repairs = go.Figure()
+    repairs.add_trace(go.Bar(x=run["iterations"], y=run["repairs"], name="Partículas reparadas"))
+    repairs.update_layout(
+        title="Reparaciones de posición por iteración",
+        xaxis_title="Iteración registrada",
+        yaxis_title="Cantidad de partículas",
+    )
+    st.plotly_chart(repairs, use_container_width=True)
+
+    st.subheader("Descomposición de la mejor solución")
+    st.write(
+        {
+            "Retorno medio por observación": run["mean_return"],
+            "Objetivo": run["target"],
+            "Brecha absoluta": run["target_gap"],
+            "CVaR usado como riesgo": run["cvar"],
+            "Penalización": run["penalty_component"],
+            "Fitness total": run["fitness"],
+            "Suma riesgo + penalización": run["fitness_components_sum"],
+            "Peso máximo": run["max_weight"],
+            "Pesos >= 0.95": run["weights_near_vertices"],
+            "Iteraciones efectivas": run["iterations_completed"],
+            "Criterio de terminación": run["termination"],
+        }
+    )
+    st.dataframe(
+        pd.DataFrame({"Activo": results["assets"], "Peso final": run["weights"]}),
+        use_container_width=True,
+        hide_index=True,
+    )
+    st.caption(
+        "La traza comienza después del primer movimiento. `repairs` cuenta "
+        "partículas cuya posición fue modificada por la reparación; no mide la "
+        "magnitud de la corrección y no representa reparación de velocidad."
+    )
+    st.subheader("Casos extremos sintéticos")
+    st.dataframe(pd.DataFrame(evaluate_extreme_cases()), use_container_width=True, hide_index=True)
+    st.warning(
+        "Estos resultados son diagnósticos: no demuestran optimalidad global ni "
+        "superioridad general de Ring o Global. La magnitud de reparación no está "
+        "instrumentada en el optimizador actual."
+    )
 
 
 def main() -> None:
@@ -85,6 +211,20 @@ def main() -> None:
         if executed:
             st.success("Validación ejecutada; los resultados quedan en memoria durante esta sesión.")
     if st.session_state.get("validation_results") is None:
+        st.divider()
+        st.header("Diagnóstico con datos reales")
+        st.write(
+            "Esta sección permanece inactiva hasta que pulses el botón. Descargará "
+            "BTC-USD, ETH-USD, SOL-USD y ADA-USD con el cargador existente, usando "
+            "2020-01-01–2024-01-01, intervalo 1d, CVaR alpha=0.95 y penalización "
+            f"{MARKET_PENALTY:g}. Comparará Ring y Global con semillas fijas "
+            "para un target mínimo y uno intermedio."
+        )
+        if st.button("Ejecutar diagnóstico con datos reales", type="primary"):
+            with st.spinner("Descargando datos y ejecutando diagnóstico..."):
+                _execute_market_diagnostic()
+        if st.session_state.get("market_diagnostic_results") is not None:
+            _render_market_diagnostic(st.session_state["market_diagnostic_results"])
         return
 
     results = st.session_state.validation_results
@@ -215,6 +355,22 @@ def main() -> None:
                 "Traza idéntica": reproducible["trace_equal"],
             }
         )
+
+    st.divider()
+    st.header("Diagnóstico con datos reales")
+    st.write(
+        "La ejecución de mercado es independiente de los casos sintéticos y "
+        "solo comienza mediante una acción explícita. No se escriben resultados "
+        "experimentales en archivos persistentes."
+    )
+    if st.button("Ejecutar diagnóstico con datos reales", type="primary"):
+        with st.spinner("Descargando datos y ejecutando diagnóstico..."):
+            executed = _execute_market_diagnostic()
+        if executed:
+            st.success("Diagnóstico de mercado completado; resultados en memoria de sesión.")
+    market_results = st.session_state.get("market_diagnostic_results")
+    if market_results is not None:
+        _render_market_diagnostic(market_results)
 
 
 if __name__ == "__main__":
