@@ -273,3 +273,28 @@ dependientes.
 - **Estado:** pendiente.
 - **Riesgos/decisiones:** decidir qué resultados se consideran aptos para
   publicación académica.
+
+### Tarea independiente de interfaz
+
+#### PSO-VD-01 — Implementar dashboard independiente de validación
+- **Objetivo:** ejecutar casos sintéticos predefinidos mediante una interfaz
+  Streamlit separada, conservar resultados en sesión y hacer visibles métricas,
+  criterios y limitaciones.
+- **Justificación:** permitir inspección académica del optimizador sin
+  depender de la interfaz principal, datos externos o artefactos persistidos.
+- **Incluye:** entry point independiente, casos sintéticos fijos, diagnóstico
+  de convergencia disponible, tablas, gráficas, pruebas y reporte.
+- **Excluye:** cambios al optimizador, rediseño de `app.py`, backtesting,
+  descargas, persistencia y conclusiones financieras.
+- **Dependencias:** PSO-01, PSO-02, PSO-03 y PSO-04 implementadas/revisadas
+  según la evidencia existente; no altera la semántica de PSO-07.
+- **Aceptación:** aplicación sin ejecución al importar, ejecución explícita,
+  resultados en memoria, repetición explícita, casos sintéticos cubiertos,
+  pruebas automatizadas y limitaciones documentadas.
+- **Evidencia:** `validation_dashboard.py`,
+  `validation_dashboard_logic.py`, `tests/test_validation_dashboard.py` y
+  `reports/PSO-VD-01-validation-dashboard.md`.
+- **Estado:** implementada; revisión independiente pendiente.
+- **Riesgos/decisiones:** la comprobación visual interactiva y la revisión
+  independiente aún no se han ejecutado; los resultados no habilitan
+  conclusiones financieras.
