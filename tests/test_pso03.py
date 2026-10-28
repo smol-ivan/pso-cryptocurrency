@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from src.controllers.experiment_controller import _build_experiment_configs
+from src.services.experiment_service import build_experiment_configs
 from src.pso import FitnessFunction, GlobalTopology, Inertia, Variance, pso
 from src.pso.fitness_function import CVaR
 
@@ -129,7 +129,7 @@ class TestPSO03ReferenceValidation(unittest.TestCase):
         )
 
     def test_streamlit_reference_profile_reaches_config_objects(self) -> None:
-        configs = _build_experiment_configs(
+        configs = build_experiment_configs(
             ["CVaR"],
             ["Inertia"],
             ["Ring", "Global"],

@@ -2,10 +2,10 @@ import pandas as pd
 import streamlit as st
 from datetime import datetime
 
-from src.controllers import run_analysis_pipeline
+from dashboards.legacy.experiment_controller import run_analysis_pipeline
 from src.models.state import ExperimentsPayload
 from src.persistence import load_experiments, export_payload_to_bytes, import_payload_from_bytes
-from src.ui.tabs import render_analysis_tab, render_comparison_tab
+from dashboards.legacy.ui.tabs import render_analysis_tab, render_comparison_tab
 
 
 OBJECTIVE_OPTIONS = ["CVaR", "VaR", "Variance", "Semivariance", "MaxDrawdown"]

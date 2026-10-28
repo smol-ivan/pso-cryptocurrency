@@ -6,7 +6,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from validation_dashboard_logic import (
+from dashboards.validation.validation_dashboard_logic import (
     MARKET_PENALTY,
     evaluate_extreme_cases,
     run_market_diagnostic,

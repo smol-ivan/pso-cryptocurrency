@@ -298,3 +298,23 @@ dependientes.
 - **Riesgos/decisiones:** la comprobación visual interactiva y la revisión
   independiente aún no se han ejecutado; los resultados no habilitan
   conclusiones financieras.
+
+### Fase 7 — Refactorización estructural
+
+#### PSO-09 — Separar core, servicios y dashboards
+- **Objetivo:** desacoplar la configuración/ejecución de experimentos de
+  Streamlit y documentar los puntos de entrada existentes sin alterar la
+  dinámica del PSO ni las métricas.
+- **Incluye:** servicio de experimentación sin dependencias de interfaz,
+  adaptador de caché del controlador actual, corrección de la ruta de
+  ejecución de `src.run_pso.py` y comandos de ejecución documentados.
+- **Excluye:** rediseño de interfaces, cambios algorítmicos, eliminación del
+  legacy y actualización integral del contexto técnico.
+- **Dependencias:** PSO-VD-01 implementada.
+- **Aceptación:** el servicio compartido se importa sin Streamlit; la suite
+  existente conserva sus resultados; los puntos de entrada actuales se
+  ejecutan de forma independiente; no se eliminan dashboards ni artefactos.
+- **Evidencia:** `reports/PSO-09-structural-refactor.md`.
+- **Estado:** implementada con limitación: el estado inicial no contiene un
+  dashboard legacy separado que pueda conservarse o migrarse.
+- **Revisión independiente:** pendiente.

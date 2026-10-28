@@ -208,3 +208,4 @@ __marimo__/
 /artifacts/experiments.pkl
 /.DS_Store
 /data/.DS_Store
+/.direnv

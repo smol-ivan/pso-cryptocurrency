@@ -10,18 +10,26 @@
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
+
+      runApp = pkgs.writeShellScriptBin "run" ''
+        uv run streamlit run app.py
+      '';
+
+      runTests = pkgs.writeShellScriptBin "dev" ''
+        uv run streamlit run validation_dashboard.py
+      '';
     in
     {
       devShells.${system}.default = pkgs.mkShell {
         buildInputs = with pkgs; [
           uv
+          runApp
+          runTests
         ];
 
-        # Comandos o variables de entorno al entrar a la shell
         shellHook = ''
-          echo "⚡ Entorno de desarrollo cargado con éxito"
-          alias run="uv run streamlit run app.py"
-          echo "Alias cargados: run"
+          echo "Entorno de desarrollo cargado con éxito"
+          echo "Comando disponible: [run dev]"
         '';
       };
     };

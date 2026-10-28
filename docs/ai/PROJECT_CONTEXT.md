@@ -158,7 +158,3 @@ diversidad se calcula, pero el reporte histórico indica que no se serializa.
 - Ventanas temporales, costos, rebalanceo y criterio de estabilidad entre
   semillas.
 
-## Reportes relacionados
-
-- [Reporte de esta preparación](../../reports/PSO-00-documentation-foundation.md)
-- [Depuración de documentación heredada](../../reports/PSO-00-documentation-cleanup.md)

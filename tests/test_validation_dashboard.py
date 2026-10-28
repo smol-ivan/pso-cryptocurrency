@@ -10,8 +10,8 @@ from unittest.mock import patch
 import numpy as np
 from streamlit.testing.v1 import AppTest
 
-import validation_dashboard
-from validation_dashboard_logic import (
+from dashboards.validation import validation_dashboard
+from dashboards.validation.validation_dashboard_logic import (
     CONVERGENCE_SEEDS,
     MARKET_SEEDS,
     MARKET_TARGETS,
@@ -33,8 +33,8 @@ def fail_if_called(*args, **kwargs):
 
 src.pso.pso = fail_if_called
 src.utils.load_crypto_returns = fail_if_called
-import validation_dashboard_logic
-import validation_dashboard
+import dashboards.validation.validation_dashboard_logic
+import dashboards.validation.validation_dashboard
 print("fresh import ok")
 """
         environment = os.environ.copy()
@@ -94,7 +94,12 @@ print("fresh import ok")
 
     def test_streamlit_initial_state_and_explicit_execution(self) -> None:
         app = AppTest.from_file(
-            str(Path(__file__).resolve().parents[1] / "validation_dashboard.py")
+            str(
+                Path(__file__).resolve().parents[1]
+                / "dashboards"
+                / "validation"
+                / "validation_dashboard.py"
+            )
         )
         app.run()
         self.assertIn("Aún no hay resultados", app.info[1].value)
@@ -113,7 +118,12 @@ print("fresh import ok")
 
     def test_streamlit_repeat_replaces_results(self) -> None:
         app = AppTest.from_file(
-            str(Path(__file__).resolve().parents[1] / "validation_dashboard.py")
+            str(
+                Path(__file__).resolve().parents[1]
+                / "dashboards"
+                / "validation"
+                / "validation_dashboard.py"
+            )
         )
         app.run()
         app.button[0].click().run()
@@ -211,7 +221,10 @@ print("fresh import ok")
             calls.append(kwargs)
             return 1.5, np.full(4, 0.25), np.empty((2, 2)), np.empty(3), trace
 
-        with patch("validation_dashboard_logic.pso", side_effect=fake_pso):
+        with patch(
+            "dashboards.validation.validation_dashboard_logic.pso",
+            side_effect=fake_pso,
+        ):
             result = run_market_diagnostic(data_loader=loader, retrieved_at="fixed")
 
         self.assertEqual(result["retrieved_at"], "fixed")

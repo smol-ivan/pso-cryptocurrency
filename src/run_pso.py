@@ -3,12 +3,6 @@ import random
 
 import numpy as np
 
-if __package__ is None or __package__ == "":
-    import sys
-    from pathlib import Path
-
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
 from src.pso import CVaR, FitnessFunction, Inertia, RingTopology, Topology, VelocityModel, pso
 from src.pso.optimizer import ConvergenceTrace
 

@@ -2,7 +2,7 @@ import pandas as pd
 import streamlit as st
 
 from src.experiments import ExperimentResult
-from src.ui import charts
+from dashboards.legacy.ui import charts
 
 
 def render_comparison_tab(

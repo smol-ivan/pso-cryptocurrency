@@ -12,8 +12,8 @@ from src.finance import (
     spaced_frontier_indices,
 )
 from src.models.state import ExperimentsPayload
-from src.ui import charts
-from src.ui.colors import get_crypto_colors
+from dashboards.legacy.ui import charts
+from dashboards.legacy.ui.colors import get_crypto_colors
 
 
 def render_analysis_tab(

@@ -1,17 +1,17 @@
 from dataclasses import dataclass
 from datetime import date, datetime
-from itertools import product
-
 import numpy as np
 import pandas as pd
 import streamlit as st
 
-from src.experiments import ExperimentConfig, run_experiments
 from src.finance import build_metrics_dataframe, build_seed_metrics_dataframe
 from src.models.state import ExperimentsPayload
-from src.pso import CVaR, VaR, Variance, Semivariance, Constriction, GlobalTopology, Inertia, MaxDrawdown, RingTopology
 from src.persistence import save_experiments
 from src.run_pso import PSOInputData
+from src.services.experiment_service import (
+    build_experiment_configs,
+    execute_experiments,
+)
 from src.utils import load_crypto_returns
 
 
@@ -58,7 +58,7 @@ def _run_experiments_cached(
 ):
     """Cached version of experiments execution. Uses simple types for hashing."""
     input_data = PSOInputData(mean_return=mean_return, returns_matrix=returns_matrix)
-    configs = _build_experiment_configs(
+    configs = build_experiment_configs(
         list(selected_objectives_tuple),
         list(selected_velocities_tuple),
         list(selected_topologies_tuple),
@@ -75,71 +75,10 @@ def _run_experiments_cached(
         base_seed=base_seed,
         seed_count=seed_count if multi_seed_enabled else 1,
     )
-    return run_experiments(input_data=input_data, experiment_configs=configs)
+    return execute_experiments(input_data=input_data, configs=configs)
 
 
-def _build_experiment_configs(
-    selected_objectives: list[str],
-    selected_velocities: list[str],
-    selected_topologies: list[str],
-    *,
-    alpha: float,
-    penalty: float,
-    c1: float,
-    c2: float,
-    inertia: float,
-    num_points: int,
-    n_swarm: int,
-    rtol: float,
-    atol: float,
-    patience: int,
-    base_seed: int | None,
-    seed_count: int = 1,
-) -> list[ExperimentConfig]:
-    configs: list[ExperimentConfig] = []
-
-    for config_index, (objective_name, velocity_name, topology_name) in enumerate(
-        product(selected_objectives, selected_velocities, selected_topologies)
-    ):
-        if objective_name == "CVaR":
-            fitness_function = CVaR(alpha=alpha, penalty=penalty)
-        elif objective_name == "VaR":
-            fitness_function = VaR(alpha=alpha, penalty=penalty)
-        elif objective_name == "Variance":
-            fitness_function = Variance(penalty=penalty)
-        elif objective_name == "Semivariance":
-            fitness_function = Semivariance(penalty=penalty)
-        else:
-            fitness_function = MaxDrawdown(penalty=penalty)
-
-        if velocity_name == "Inertia":
-            velocity_model = Inertia(c1=c1, c2=c2, inertia=inertia)
-        else:
-            velocity_model = Constriction(c1=c1, c2=c2)
-
-        topology = RingTopology(k_neighbors=1) if topology_name == "Ring" else GlobalTopology()
-        config_name = f"{objective_name} | {velocity_name} | {topology_name}"
-
-        configs.append(
-            ExperimentConfig(
-                name=config_name,
-                objective_name=objective_name,
-                velocity_name=velocity_name,
-                topology_name=topology_name,
-                fitness_function=fitness_function,
-                velocity_model=velocity_model,
-                topology=topology,
-                num_points=num_points,
-                n_swarm=n_swarm,
-                rtol=rtol,
-                atol=atol,
-                patience=patience,
-                seed=None if base_seed is None else base_seed + config_index,
-                seed_count=seed_count,
-            )
-        )
-
-    return configs
+_build_experiment_configs = build_experiment_configs
 
 
 def run_analysis_pipeline(
