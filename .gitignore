@@ -209,3 +209,8 @@ __marimo__/
 /.DS_Store
 /data/.DS_Store
 /.direnv
+
+
+# Added by cargo
+
+/target

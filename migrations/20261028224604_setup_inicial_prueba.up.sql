@@ -1,0 +1,6 @@
+CREATE TABLE resultados (
+    id BIGSERIAL PRIMARY KEY,
+    clave TEXT UNIQUE NOT NULL,
+    valor DOUBLE PRECISION NOT NULL,
+    calculado_en TIMESTAMPTZ NOT NULL DEFAULT now()
+);
