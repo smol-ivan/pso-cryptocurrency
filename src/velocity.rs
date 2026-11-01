@@ -8,7 +8,7 @@ use ndarray_rand::rand;
 use ndarray_rand::rand_distr::Uniform;
 
 pub trait VelocityModel {
-    fn update(&self, particle: &mut Particle, best_global: &Particle);
+    fn update(&self, particle: &mut Particle, best_global: &Particle, dimension: usize);
     fn repair_position(&self, position: &mut Weights);
 }
 
@@ -29,17 +29,12 @@ impl Default for InertiaM {
 }
 
 impl VelocityModel for InertiaM {
-    fn update(&self, particle: &mut Particle, best_global: &Particle) {
-        //TODO: temporary hardcoded dimensionality value.
-        // best to look on how to pass that value bc we know it and we do not
-        // need to calculate each time
-        let dim = 2;
-
+    fn update(&self, particle: &mut Particle, best_global: &Particle, dimension: usize) {
         let mut rng = rand::rng();
 
         // Generation or random vectors r1,r2
-        let r1 = Array1::<f64>::random_using(dim, Uniform::new(0.0, 1.0).unwrap(), &mut rng);
-        let r2 = Array1::<f64>::random_using(dim, Uniform::new(0.0, 1.0).unwrap(), &mut rng);
+        let r1 = Array1::<f64>::random_using(dimension, Uniform::new(0.0, 1.0).unwrap(), &mut rng);
+        let r2 = Array1::<f64>::random_using(dimension, Uniform::new(0.0, 1.0).unwrap(), &mut rng);
 
         let inertia_cmp = self.inertia * &particle.velocity;
         let personal_cmp = self.c1 * &r1 * (&particle.best_position - &particle.position);
@@ -49,6 +44,7 @@ impl VelocityModel for InertiaM {
         particle.position += &particle.velocity;
 
         //TODO: normalizar posiciones por reestriccion de pesos ponderados = 1
+        self.repair_position(&mut particle.position);
     }
 
     /// Call for an ambulance for those that are outa bounds!
@@ -65,8 +61,10 @@ impl VelocityModel for InertiaM {
             // Always normalize
             *position /= sum;
         } else {
+            // If everything is zero
+            // give all the same value
             let n = position.len() as f64;
-            position.fill(x);
+            position.fill(1. / n);
         }
     }
 }
