@@ -10,6 +10,9 @@ psql:
 run:
     cargo run --release
 
+dev:
+    cargo run
+
 migrate-new nombre:
     sqlx migrate add -r {{nombre}}
 
