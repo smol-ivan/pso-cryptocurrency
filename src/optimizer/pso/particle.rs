@@ -1,5 +1,5 @@
-use crate::fitness::FitnessFunction;
-use crate::types::{Momentums, Weights};
+use super::fitness::FitnessFunction;
+use super::types::{Momentums, Weights};
 
 #[derive(Debug, Clone)]
 pub struct Particle {

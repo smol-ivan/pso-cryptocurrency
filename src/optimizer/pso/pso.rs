@@ -1,13 +1,11 @@
-use crate::fitness::FitnessFunction;
-use crate::fitness::Variance;
-use crate::particle::Particle;
-use crate::types::Momentums;
-use crate::types::Weights;
-use crate::velocity::InertiaM;
-use crate::velocity::VelocityModel;
 use ndarray::Array1;
 use ndarray_rand::RandomExt;
 use ndarray_rand::rand_distr::Uniform;
+
+use super::fitness::{FitnessFunction, Variance};
+use super::particle::Particle;
+use super::types::{Momentums, Weights};
+use super::velocity::{InertiaM, VelocityModel};
 
 pub struct Pso {
     fitness_function: Box<dyn FitnessFunction>,

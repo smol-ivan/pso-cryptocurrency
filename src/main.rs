@@ -1,12 +1,10 @@
-mod fitness;
-mod particle;
-mod pso;
-mod types;
-mod velocity;
+mod optimizer;
 
-use crate::pso::Pso;
+use optimizer::pso::Pso;
+use tokio;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     println!("Hello, world!");
     let pso = Pso::default();
     pso.optimization();
