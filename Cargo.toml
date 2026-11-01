@@ -10,3 +10,5 @@ ndarray = { version = "0.17", features = ["blas"] }
 blas-src = { version = "0.10", features = ["openblas"] }
 openblas-src = { version = "0.10", features = ["cblas", "system"] }
 ndarray-rand = "0.16.0"
+yahoo_finance_api = "5.0.0"
+time = "0.3.55"
