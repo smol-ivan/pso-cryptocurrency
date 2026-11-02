@@ -40,3 +40,12 @@ restore-metabase:
     docker compose exec -T db psql -U app -d metabase < metabase_backup.sql
     docker compose start metabase
 
+# Documentación con soporte LaTeX (KaTeX)
+doc:
+    RUSTDOCFLAGS="--html-in-header katex-header.html" cargo doc --no-deps
+
+# Documentación y abrir en el navegador
+doc-open:
+    RUSTDOCFLAGS="--html-in-header katex-header.html" cargo doc --no-deps --open
+
+
