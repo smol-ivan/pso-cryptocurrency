@@ -27,3 +27,16 @@ logs:
 
 logs-db:
     docker compose logs -f --tail 100 db
+
+# Exportar metabase
+dump-metabase:
+    docker compose exec db pg_dump -U app -d metabase > metabase_backup.sql
+
+# Restaurar metabase
+restore-metabase:
+    docker compose stop metabase
+    docker compose exec -T db psql -U app -d postgres -c "DROP DATABASE IF EXISTS metabase;"
+    docker compose exec -T db psql -U app -d postgres -c "CREATE DATABASE metabase;"
+    docker compose exec -T db psql -U app -d metabase < metabase_backup.sql
+    docker compose start metabase
+
