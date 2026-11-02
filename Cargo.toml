@@ -11,4 +11,5 @@ openblas-src = { version = "0.10", features = ["cblas", "system"] }
 ndarray-rand = "0.16.0"
 yahoo_finance_api = "5.0.0"
 time = "0.3.55"
-sqlx = { version = "0.8", features = [ "runtime-tokio", "tls-native-tls", "postgres", "chrono" ] }
+sqlx = { version = "0.8", features = [ "runtime-tokio", "tls-native-tls", "postgres", "chrono", "rust_decimal" ] }
+anyhow = "1.0.104"

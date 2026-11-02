@@ -1,10 +1,15 @@
 CREATE TABLE market_prices (
-    ticker TEXT NOT NULL,
-    timestamp TIMESTAMPTZ NOT NULL,
-    open DOUBLE PRECISION,
-    high DOUBLE PRECISION,
-    low DOUBLE PRECISION,
-    close DOUBLE PRECISION,
-    volume BIGINT,
-    PRIMARY KEY (ticker, timestamp)
-)
+    symbol TEXT NOT NULL,
+    timestamp BIGINT NOT NULL,
+    open NUMERIC NOT NULL,
+    high NUMERIC NOT NULL,
+    low NUMERIC NOT NULL,
+    close NUMERIC NOT NULL,
+    adjclose NUMERIC NOT NULL,
+    volume BIGINT NOT NULL,
+
+    PRIMARY KEY (symbol, timestamp)
+);
+
+-- To generate updates, we should use insert ... ON conflict, 
+-- so we dont have duplicates

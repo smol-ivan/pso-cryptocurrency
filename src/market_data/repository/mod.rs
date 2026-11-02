@@ -1,3 +1,3 @@
 mod postgres;
 
-pub use postgres::save_quotes;
+pub use postgres::save_assets;
