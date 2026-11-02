@@ -214,3 +214,4 @@ __marimo__/
 # Added by cargo
 
 /target
+/.direnv/bin
