@@ -1,5 +1,6 @@
 mod market_data;
 mod optimizer;
+mod domain;
 
 use optimizer::pso::Pso;
 use time::macros::datetime;

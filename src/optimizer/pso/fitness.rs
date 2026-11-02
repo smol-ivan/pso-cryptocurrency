@@ -1,4 +1,4 @@
-use super::types::Weights;
+use crate::domain::Weights;
 
 pub trait FitnessFunction {
     fn calculate_risk(&self, position: &Weights) -> f64;

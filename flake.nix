@@ -17,16 +17,26 @@
       in
       {
         devShells.default = pkgs.mkShell {
+          # herramientas que corren en tu máquina durante el build
+          nativeBuildInputs = with pkgs; [
+            pkg-config
+          ];
+
+          # librerías contra las que se enlaza
+          buildInputs = with pkgs; [
+            openssl
+            openblas
+            gfortran.cc.lib # libgfortran, que openblas suele necesitar
+          ];
+
           packages = with pkgs; [
             cargo
             rustc
             rustfmt
             clippy
             rust-analyzer
-            pkg-config
-            openssl
-            postgresql # para tener psql
-            sqlx-cli # migraciones (opcional)
+            postgresql
+            sqlx-cli
             docker-compose
             just
             lazydocker

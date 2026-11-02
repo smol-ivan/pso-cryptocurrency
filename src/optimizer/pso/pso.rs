@@ -4,8 +4,8 @@ use ndarray_rand::rand_distr::Uniform;
 
 use super::fitness::{FitnessFunction, Variance};
 use super::particle::Particle;
-use super::types::{Momentums, Weights};
 use super::velocity::{InertiaM, VelocityModel};
+use crate::domain::types::{Momentums, Weights};
 
 pub struct Pso {
     fitness_function: Box<dyn FitnessFunction>,

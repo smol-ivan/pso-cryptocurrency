@@ -1,5 +1,5 @@
 use super::particle::Particle;
-use super::types::Weights;
+use crate::domain::types::Weights;
 use ndarray_rand::RandomExt;
 
 use ndarray::Array1;
