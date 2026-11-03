@@ -1,3 +1,6 @@
+use anyhow::{Ok, Result};
+use ndarray::Axis;
+
 use crate::domain::types::Quotes;
 
 /// Este modelo representara los datos del activo
@@ -36,5 +39,21 @@ impl Dataset {
             timestamps,
             returns,
         }
+    }
+
+    pub fn target_return_bounds(&self) -> Result<(f64, f64)> {
+        let mean_returns = self.returns.mean_axis(Axis(0)).unwrap();
+        let min_ret = mean_returns
+            .iter()
+            .copied()
+            .min_by(|a, b| a.total_cmp(b))
+            .unwrap();
+        let max_ret = mean_returns
+            .iter()
+            .copied()
+            .max_by(|a, b| a.total_cmp(b))
+            .unwrap();
+
+        Ok((min_ret, max_ret))
     }
 }

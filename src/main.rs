@@ -67,10 +67,14 @@ async fn main() -> Result<()> {
     save_assets(&pool, &res).await?;
     let dataset = build(&pool, &tickers, start, end).await?;
 
-    println!("Activos {:?}", dataset.assets);
-    println!("Dimensiones {:?}", dataset.returns.dim());
+    // println!("Activos {:?}", dataset.assets);
+    // println!("Dimensiones {:?}", dataset.returns.dim());
     println!("Retornos {:#?}", dataset.returns);
-    println!("Fechas {:?}", dataset.timestamps.len());
+    println!(
+        "Target return bounds: {:#?}",
+        dataset.target_return_bounds()
+    );
+    // println!("Fechas {:?}", dataset.timestamps.len());
     let fitness_function = Box::new(Variance::default());
     let velocity_model = Box::new(InertiaM::default());
     let returns = dataset.returns;
@@ -87,7 +91,7 @@ async fn main() -> Result<()> {
         target_return,
     );
 
-    pso.optimization();
+    // pso.optimization();
 
     Ok(())
 }
