@@ -75,7 +75,7 @@ async fn main() -> Result<()> {
                 "Starting PSO optimization with target return: {:?}",
                 target_return
             );
-            pso.optimization();
+            let best_p = pso.optimization()?;
         }
     };
 

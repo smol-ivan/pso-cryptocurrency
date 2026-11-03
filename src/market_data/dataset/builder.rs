@@ -1,3 +1,12 @@
+//! Historical market data retrieval and dataset construction.
+//!
+//! This module retrieves historical asset prices from PostgreSQL,
+//! validates and aligns observations across the requested assets,
+//! and transforms prices into simple returns.
+//!
+//! The resulting dataset contains a two-dimensional return matrix,
+//! where rows represent observation periods and columns represent
+//! assets in the same order as the input asset list.
 use sqlx::Row;
 use std::collections::{BTreeMap, HashMap};
 
@@ -8,13 +17,46 @@ use time::OffsetDateTime;
 
 use crate::domain::Dataset;
 
-/// Consult, validate, align and transform data from data_market table.
+/// Builds a dataset of historical asset returns from stored market prices.
 ///
-/// $$R_{i,t} = P_{i,t} / P_{i,t-1} − 1$$
+/// This function retrieves closing prices for the requested assets within
+/// the specified date range. Only timestamps shared by all requested
+/// assets are retained, ensuring temporal alignment across price series.
+///
+/// Prices are organized into a matrix and transformed into simple
+/// period returns using:
+///
+/// $$R_{i,t} = \frac{P_{i,t}}{P_{i,t-1}} - 1$$
 ///
 /// Where:
-/// - $P_{i,t}$: asset price $i$ in period $t$.
-/// - $P_{i,t-1}$: asset price in the previous period.
+/// - $R_{i,t}$ represents the return of asset $i$ at period $t$.
+/// - $P_{i,t}$ represents the closing price of asset $i$ at period $t$.
+/// - $P_{i,t-1}$ represents the previous closing price of asset $i$.
+///
+/// # Arguments
+///
+/// * `pool` - PostgreSQL connection pool.
+/// * `assets` - Ordered list of asset ticker symbols to include.
+/// * `start` - Beginning of the historical data range.
+/// * `end` - End of the historical data range.
+///
+/// # Returns
+///
+/// A [`Dataset`] containing:
+/// - The requested asset symbols in their original order.
+/// - Timestamps associated with the calculated return observations.
+/// - A two-dimensional matrix of simple returns, with observations
+///   as rows and assets as columns.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - No assets are provided.
+/// - The start date is not earlier than the end date.
+/// - The database query fails.
+/// - Retrieved rows cannot be decoded.
+/// - An asset price is missing for an expected timestamp.
+/// - The return matrix cannot be constructed.
 pub async fn build(
     pool: &PgPool,
     assets: &[String],
@@ -24,12 +66,21 @@ pub async fn build(
     // Validacion de parametros
     ensure!(!assets.is_empty(), "Should specify at least one asset");
 
-    ensure!(start < end, "Start date should be after the end date");
+    ensure!(start < end, "Start date must be earlier than end date");
 
     // TODO: should validate empty strings and duplicates
 
     let symbols = assets.to_vec();
 
+    // Retrieve closing prices for the requested assets within the specified
+    // date range.
+    //
+    // The `common_dates` CTE identifies timestamps where all requested assets
+    // have available price records. This ensures that every observation
+    // contains data for the complete asset set.
+    //
+    // The main query retrieves the corresponding closing prices and orders
+    // them chronologically, grouping assets by timestamp.
     let rows = sqlx::query(
         r#"
         WITH common_dates AS (
@@ -60,7 +111,12 @@ pub async fn build(
     .await
     .context("Error trying to fetch data")?;
 
-    // TODO: Validate that results is non empty
+    // TODO: Validate that asset symbols are non-empty and unique.
+    // TODO: Validate that the query returns at least two observations
+    // before calculating returns.
+
+    // Group prices by timestamp to ensure chronological ordering
+    // and facilitate alignment across the requested assets.
 
     let mut prices_by_timestamp: BTreeMap<i64, HashMap<String, f64>> = BTreeMap::new();
 
@@ -69,7 +125,7 @@ pub async fn build(
         let symbol: String = row.try_get("symbol")?;
         let close: f64 = row.try_get("close")?;
 
-        // TODO: Validate that close is valid: ex above 0 or non infinite
+        // TODO: Validate that closing prices are finite and strictly positive.
 
         prices_by_timestamp
             .entry(timestamp)
@@ -77,7 +133,7 @@ pub async fn build(
             .insert(symbol, close);
     }
 
-    // Construction of matrix price orderer by asset and date
+    // Build the price matrix while preserving the original asset order.
     let mut timestamps = Vec::with_capacity(prices_by_timestamp.len());
     let mut prices = Vec::with_capacity(prices_by_timestamp.len() * assets.len());
 
@@ -92,8 +148,8 @@ pub async fn build(
         }
     }
 
-    // TODO: validate daily continuity
-
+    // TODO: Validate continuity between consecutive observations
+    // if daily returns are required.
     // Calculate simple return
 
     let n_observations = timestamps.len();

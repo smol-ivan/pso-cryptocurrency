@@ -3,33 +3,58 @@ use ndarray::{Array1, Array2};
 use ndarray_rand::RandomExt;
 use ndarray_rand::rand_distr::Uniform;
 
-use super::fitness::{FitnessFunction, Variance};
+use super::fitness::FitnessFunction;
 use super::particle::Particle;
-use super::velocity::{InertiaM, VelocityModel};
+use super::velocity::VelocityModel;
 use crate::domain::types::{Momentums, Weights};
 
+// TODO: Define how non-finite fitness values are handled
+// during global best selection.
+
+/// Particle swarm optimization engine for portfolio optimization.
+///
+/// The optimizer coordinates particle initialization, fitness evaluation,
+/// global best selection, and particle movement throughout the optimization
+/// process.
+///
+/// Fitness evaluation and velocity updates are delegated to configurable
+/// strategy implementations.
 pub struct Pso {
+    /// Fitness function used to evaluate candidate portfolios.
     fitness_function: Box<dyn FitnessFunction>,
+
+    /// Velocity update strategy used to move particles.
     velocity_model: Box<dyn VelocityModel>,
+
+    /// Number of dimensions in the search space.
+    ///
+    /// For portfolio optimization, this corresponds to the number of assets.
     dimensions: usize,
+
+    /// Number of particles in the swarm
     swarm_size: usize,
+
+    /// Historical asset returns used during fitness evaluation.
+    ///
+    /// Rows represent observations and columns represent assets.
     returns: Array2<f64>,
+
+    /// Minimum expected portfolio return required by the fitness function.
     target_return: f64,
 }
 
-// TODO: with the adittion for returns and so on, evaluate if default function is really nedded
-// impl Default for Pso {
-//     fn default() -> Self {
-//         Pso {
-//             fitness_function: Box::new(Variance::default()),
-//             velocity_model: Box::new(InertiaM::default()),
-//             dimensions: 4,
-//             swarm_size: 3,
-//         }
-//     }
-// }
-
 impl Pso {
+    /// Creates a PSO optimizer with the provided strategies and parameters.
+    ///
+    /// # Arguments
+    ///
+    /// * `fitness_function` - Strategy used to evaluate candidate portfolios.
+    /// * `velocity_model` - Strategy used to update particle velocities and positions.
+    /// * `dimensions` - Number of dimensions in the search space.
+    /// * `swarm_size` - Number of particles in the swarm.
+    /// * `returns` - Historical asset returns, with observations as rows
+    ///   and assets as columns.
+    /// * `target_return` - Minimum expected portfolio return.
     pub fn new(
         fitness_function: Box<dyn FitnessFunction>,
         velocity_model: Box<dyn VelocityModel>,
@@ -47,15 +72,20 @@ impl Pso {
             target_return,
         }
     }
+
+    /// Executes the particle swarm optimization process.
+    ///
+    /// The method initializes the swarm, evaluates particle fitness,
+    /// updates the global best solution, and applies the configured
+    /// velocity model over a fixed number of iterations.
+    ///
+    /// Particle fitness is minimized throughout the optimization process.
     pub fn optimization(&self) -> Result<Particle> {
         let mut swarm = self.init_swarm();
         let mut best_global = swarm[0].clone(); // Escoger cualquier particula para empezar
 
-        self.find_best_global(&swarm, &mut best_global);
-        println!("{:#?}", swarm);
-
-        //TODO: cambiar for por while
-        // Eso implica paro por convergencia
+        // TODO: Replace the fixed iteration count with a configurable
+        // stopping criterion.
         for _ in 0..100 {
             // evaluar cada particula
             swarm.iter_mut().for_each(|p| {
@@ -77,11 +107,14 @@ impl Pso {
         Ok(best_global)
     }
 
-    /// Hello to all my rabies!
+    /// Initializes the particle swarm.
     ///
-    /// - Basically we give each particle a randon start position (each dimension from 0 to 1)
-    /// and everyone start with velocity zero
+    /// Each particle receives a random position in the search space
+    /// and an initial velocity vector filled with zeros.
     ///
+    /// # Returns
+    ///
+    /// A vector containing the initialized particles.
     fn init_swarm(&self) -> Vec<Particle> {
         (0..self.swarm_size)
             .map(|_| {
@@ -95,6 +128,15 @@ impl Pso {
             .collect()
     }
 
+    /// Updates the global best particle if a better personal best is found.
+    ///
+    /// The particle with the lowest personal best fitness value is selected
+    /// and compared against the current global best.
+    ///
+    /// # Arguments
+    ///
+    /// * `swarm` - Current population of particles.
+    /// * `best_global` - Mutable reference to the global best particle.
     fn find_best_global(&self, swarm: &[Particle], best_global: &mut Particle) {
         let best_iter = swarm
             .iter()
