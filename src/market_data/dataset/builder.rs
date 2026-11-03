@@ -10,12 +10,11 @@ use crate::domain::Dataset;
 
 /// Consult, validate, align and transform data from data_market table.
 ///
-/// $$r_{i,t} = \ln\left(\frac{P_{i,t}}{P_{i,t-1}}\right)$$
+/// $$R_{i,t} = P_{i,t} / P_{i,t-1} − 1$$
 ///
 /// Where:
 /// - $P_{i,t}$: asset price $i$ in period $t$.
 /// - $P_{i,t-1}$: asset price in the previous period.
-/// - $r_{i,t}$: logarithmic return.
 pub async fn build(
     pool: &PgPool,
     assets: &[String],
@@ -95,7 +94,7 @@ pub async fn build(
 
     // TODO: validate daily continuity
 
-    // Calculate logarithmic return
+    // Calculate simple return
 
     let n_observations = timestamps.len();
     let n_assets = assets.len();
@@ -108,7 +107,7 @@ pub async fn build(
 
             let current_price = prices[t * n_assets + asset_idx];
 
-            let daily_return = (current_price / previous_price).ln();
+            let daily_return = current_price / previous_price - 1.0;
 
             returns.push(daily_return);
         }
