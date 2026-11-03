@@ -1,8 +1,10 @@
+use ndarray::{Array1, Array2};
+
 use crate::domain::Weights;
 
 pub trait FitnessFunction {
-    fn calculate_risk(&self, position: &Weights) -> f64;
-    fn get_fitness(&self, position: &Weights) -> f64;
+    fn calculate_risk(&self, portfolio_returns: Array1<f64>) -> f64;
+    fn get_fitness(&self, position: &Weights, returns: &Array2<f64>, target_return: f64) -> f64;
 }
 
 pub struct Variance {
@@ -16,28 +18,28 @@ impl Default for Variance {
 }
 
 impl FitnessFunction for Variance {
-    fn calculate_risk(&self, position: &Weights) -> f64 {
-        // TODO: swarm size value should be know for the calculations
-        let n = position.len() as f64;
-        if n == 0.0 {
-            return 0.0;
-        }
+    fn calculate_risk(&self, portfolio_returns: Array1<f64>) -> f64 {
+        let mean = portfolio_returns.mean().unwrap_or(0.0);
 
-        let mean = position.mean().unwrap_or(0.0);
-        let var = position.mapv(|x| (x - mean).powi(2)).sum() / n;
-
-        var
+        portfolio_returns
+            .mapv(|r| (r - mean).powi(2))
+            .mean()
+            .unwrap_or(0.0)
     }
 
     /// As we get the risk raw value, we also give punishment
     /// to those particles that do not meet the target
     ///
-    /// TODO: Pending to recieve target value, subject yet to
-    /// risk or profit/return
-    fn get_fitness(&self, position: &Weights) -> f64 {
-        let risk = self.calculate_risk(&position);
+    /// TODO: Validate for fault dimensions, empty matrix, infinity values
+    fn get_fitness(&self, position: &Weights, returns: &Array2<f64>, target_return: f64) -> f64 {
+        // R * w
+        let portfolio_returns = returns.dot(position);
+        // expected return
+        let expected_return = portfolio_returns.mean().unwrap_or(0.0);
 
-        let sum_error = (position.sum() - 1.0).powi(2);
+        let risk = self.calculate_risk(portfolio_returns);
+
+        let sum_error = (target_return - expected_return).max(0.0);
 
         risk + self.penalty * sum_error
     }

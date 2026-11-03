@@ -3,19 +3,20 @@ mod market_data;
 mod optimizer;
 
 use optimizer::pso::Pso;
+use time::OffsetDateTime;
 use time::macros::datetime;
 use tokio;
 
 use crate::market_data::repository::save_assets;
 use crate::market_data::{dataset::build, provider::download};
+use crate::optimizer::pso::{InertiaM, Variance, VelocityModel};
 
-use anyhow::Result;
+use anyhow::{Ok, Result};
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use std::env;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    println!("Hello, world!");
     // let pso = Pso::default();
     // pso.optimization();
     let start = datetime!(2024-1-1 0:00:00.00 UTC);
@@ -25,21 +26,35 @@ async fn main() -> Result<()> {
     // println!("{:#?}", res)
     let database_url = env::var("DATABASE_URL")?;
 
-    // let conn = PgConnection::connect(database_url.as_str());
     let pool = PgPoolOptions::new()
         .max_connections(2)
         .connect(database_url.as_str())
         .await
         .unwrap();
 
-    // save_assets(&pool, &res).await?;
-    //
     let dataset = build(&pool, &tickers, start, end).await?;
 
-    println!("Activos {:?}", dataset.assets);
-    println!("Dimensiones {:?}", dataset.returns.dim());
-    println!("Retornos {:#?}", dataset.returns);
-    println!("Fechas {:?}", dataset.timestamps.len());
+    // println!("Activos {:?}", dataset.assets);
+    // println!("Dimensiones {:?}", dataset.returns.dim());
+    // println!("Retornos {:#?}", dataset.returns);
+    // println!("Fechas {:?}", dataset.timestamps.len());
+    let fitness_function = Box::new(Variance::default());
+    let velocity_model = Box::new(InertiaM::default());
+    let returns = dataset.returns;
+    let dimensions = dataset.assets.len();
+    let swarm_size = 3;
+    let target_return = 0.01;
+
+    let pso = Pso::new(
+        fitness_function,
+        velocity_model,
+        dimensions,
+        swarm_size,
+        returns,
+        target_return,
+    );
+
+    pso.optimization();
 
     Ok(())
 }

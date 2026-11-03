@@ -1,3 +1,5 @@
+use ndarray::Array2;
+
 use super::fitness::FitnessFunction;
 use crate::domain::types::{Momentums, Weights};
 
@@ -33,8 +35,13 @@ impl Particle {
         }
     }
 
-    pub fn evaluate_fitness(&mut self, function: &dyn FitnessFunction) {
-        let fitness_value = function.get_fitness(&self.position);
+    pub fn evaluate_fitness(
+        &mut self,
+        function: &dyn FitnessFunction,
+        returns: &Array2<f64>,
+        target_return: f64,
+    ) {
+        let fitness_value = function.get_fitness(&self.position, &returns, target_return);
 
         self.value = fitness_value;
 

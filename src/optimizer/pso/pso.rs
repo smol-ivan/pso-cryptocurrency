@@ -1,4 +1,4 @@
-use ndarray::Array1;
+use ndarray::{Array1, Array2};
 use ndarray_rand::RandomExt;
 use ndarray_rand::rand_distr::Uniform;
 
@@ -12,35 +12,58 @@ pub struct Pso {
     velocity_model: Box<dyn VelocityModel>,
     dimensions: usize,
     swarm_size: usize,
+    returns: Array2<f64>,
+    target_return: f64,
 }
 
-impl Default for Pso {
-    fn default() -> Self {
-        Pso {
-            fitness_function: Box::new(Variance::default()),
-            velocity_model: Box::new(InertiaM::default()),
-            dimensions: 4,
-            swarm_size: 3,
-        }
-    }
-}
+// TODO: with the adittion for returns and so on, evaluate if default function is really nedded
+// impl Default for Pso {
+//     fn default() -> Self {
+//         Pso {
+//             fitness_function: Box::new(Variance::default()),
+//             velocity_model: Box::new(InertiaM::default()),
+//             dimensions: 4,
+//             swarm_size: 3,
+//         }
+//     }
+// }
 
 impl Pso {
+    pub fn new(
+        fitness_function: Box<dyn FitnessFunction>,
+        velocity_model: Box<dyn VelocityModel>,
+        dimensions: usize,
+        swarm_size: usize,
+        returns: Array2<f64>,
+        target_return: f64,
+    ) -> Self {
+        Pso {
+            fitness_function,
+            velocity_model,
+            dimensions,
+            swarm_size,
+            returns,
+            target_return,
+        }
+    }
     pub fn optimization(&self) {
         let mut swarm = self.init_swarm();
         let mut best_global = swarm[0].clone(); // Escoger cualquier particula para empezar
 
         self.find_best_global(&swarm, &mut best_global);
+        println!("{:#?}", swarm);
 
         //TODO: cambiar for por while
         // Eso implica paro por convergencia
-        for _ in 0..1 {
+        for _ in 0..100 {
             // evaluar cada particula
-            swarm
-                .iter_mut()
-                .for_each(|p| p.evaluate_fitness(self.fitness_function.as_ref()));
-
-            // TODO: Encontrar al mejor absoluto
+            swarm.iter_mut().for_each(|p| {
+                p.evaluate_fitness(
+                    self.fitness_function.as_ref(),
+                    &self.returns,
+                    self.target_return,
+                )
+            });
 
             self.find_best_global(&swarm, &mut best_global);
 
