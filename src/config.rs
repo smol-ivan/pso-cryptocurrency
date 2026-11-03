@@ -14,6 +14,8 @@ pub struct PsoConfig {
     pub end: OffsetDateTime,
     pub swarm_size: usize,
     pub target_return: f64,
+    pub iterations: usize,
+    pub seed: u64,
 }
 
 #[derive(Deserialize, Debug)]

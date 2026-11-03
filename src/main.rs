@@ -31,6 +31,7 @@ async fn main() -> Result<()> {
 
     match args.command.unwrap_or(Commands::OptimizeSingleTest {
         target_return: None,
+        seed: None,
     }) {
         Commands::UpdateDb => {
             println!("Applying database update");
@@ -52,7 +53,7 @@ async fn main() -> Result<()> {
             println!("MAX: {:?}", dataset.target_return_bounds()?.1);
         }
 
-        Commands::OptimizeSingleTest { target_return } => {
+        Commands::OptimizeSingleTest { target_return, seed } => {
             let dataset = build(
                 &pool,
                 &settings.pso.tickers,
@@ -61,19 +62,22 @@ async fn main() -> Result<()> {
             )
             .await?;
             let target_return = target_return.unwrap_or(settings.pso.target_return);
+            let seed = seed.unwrap_or(settings.pso.seed);
 
-            let pso = Pso::new(
+            let mut pso = Pso::new(
                 Box::new(Variance::default()),
                 Box::new(InertiaM::default()),
                 dataset.assets.len(),
                 settings.pso.swarm_size,
                 dataset.returns,
                 target_return,
+                settings.pso.iterations,
+                seed,
             );
 
             println!(
-                "Starting PSO optimization with target return: {:?}",
-                target_return
+                "Starting PSO optimization with target return: {:?}, seed: {}",
+                target_return, seed
             );
             let best_p = pso.optimization()?;
         }

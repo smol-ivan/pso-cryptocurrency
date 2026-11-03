@@ -21,7 +21,14 @@ pub trait VelocityModel {
     /// * `particle` - Particle whose velocity and position will be updated.
     /// * `best_global` - Particle representing the best global solution found.
     /// * `dimension` - Number of dimensions in the search space.
-    fn update(&self, particle: &mut Particle, best_global: &Particle, dimension: usize);
+    /// * `rng` - Random number generator initialized with the optimizer seed.
+    fn update(
+        &self,
+        particle: &mut Particle,
+        best_global: &Particle,
+        dimension: usize,
+        rng: &mut rand::rngs::StdRng,
+    );
 
     /// Repairs a particle position to satisfy the search-space constraints.
     ///
@@ -75,13 +82,17 @@ impl VelocityModel for InertiaM {
     /// * `particle` - Particle to update.
     /// * `best_global` - Global best particle used by the social component.
     /// * `dimension` - Number of dimensions used to generate the random vectors.
-    fn update(&self, particle: &mut Particle, best_global: &Particle, dimension: usize) {
-        // TODO: Verify random number generation consistency with the optimizer seed policy.
-        let mut rng = rand::rng();
-
+    /// * `rng` - Random number generator initialized with the optimizer seed.
+    fn update(
+        &self,
+        particle: &mut Particle,
+        best_global: &Particle,
+        dimension: usize,
+        rng: &mut rand::rngs::StdRng,
+    ) {
         // Generate random acceleration vectors for the cognitive and social components.
-        let r1 = Array1::<f64>::random_using(dimension, Uniform::new(0.0, 1.0).unwrap(), &mut rng);
-        let r2 = Array1::<f64>::random_using(dimension, Uniform::new(0.0, 1.0).unwrap(), &mut rng);
+        let r1 = Array1::<f64>::random_using(dimension, Uniform::new(0.0, 1.0).unwrap(), rng);
+        let r2 = Array1::<f64>::random_using(dimension, Uniform::new(0.0, 1.0).unwrap(), rng);
 
         let inertia_cmp = self.inertia * &particle.velocity;
         let personal_cmp = self.c1 * &r1 * (&particle.best_position - &particle.position);

@@ -3,6 +3,9 @@ use ndarray::{Array1, Array2};
 use ndarray_rand::RandomExt;
 use ndarray_rand::rand_distr::Uniform;
 
+use ndarray_rand::rand::SeedableRng;
+use ndarray_rand::rand::rngs::StdRng;
+
 use super::fitness::FitnessFunction;
 use super::particle::Particle;
 use super::velocity::VelocityModel;
@@ -41,6 +44,12 @@ pub struct Pso {
 
     /// Minimum expected portfolio return required by the fitness function.
     target_return: f64,
+
+    /// Number of iteratios given to the optimization
+    iterations: usize,
+
+    /// Seeded pseudo-random number generator for deterministic optimization.
+    rng: StdRng,
 }
 
 impl Pso {
@@ -55,6 +64,8 @@ impl Pso {
     /// * `returns` - Historical asset returns, with observations as rows
     ///   and assets as columns.
     /// * `target_return` - Minimum expected portfolio return.
+    /// * `iterations` - Number of iterations for the optimization.
+    /// * `seed` - Seed value for deterministic pseudo-random number generation.
     pub fn new(
         fitness_function: Box<dyn FitnessFunction>,
         velocity_model: Box<dyn VelocityModel>,
@@ -62,6 +73,8 @@ impl Pso {
         swarm_size: usize,
         returns: Array2<f64>,
         target_return: f64,
+        iterations: usize,
+        seed: u64,
     ) -> Self {
         Pso {
             fitness_function,
@@ -70,6 +83,8 @@ impl Pso {
             swarm_size,
             returns,
             target_return,
+            iterations,
+            rng: StdRng::seed_from_u64(seed),
         }
     }
 
@@ -80,13 +95,13 @@ impl Pso {
     /// velocity model over a fixed number of iterations.
     ///
     /// Particle fitness is minimized throughout the optimization process.
-    pub fn optimization(&self) -> Result<Particle> {
+    pub fn optimization(&mut self) -> Result<Particle> {
         let mut swarm = self.init_swarm();
         let mut best_global = swarm[0].clone(); // Escoger cualquier particula para empezar
 
         // TODO: Replace the fixed iteration count with a configurable
         // stopping criterion.
-        for _ in 0..100 {
+        for _ in 0..self.iterations {
             // evaluar cada particula
             swarm.iter_mut().for_each(|p| {
                 p.evaluate_fitness(
@@ -100,8 +115,12 @@ impl Pso {
 
             //TODO: actualizar posicion dada la velocidad y normalizar
             for particle in &mut swarm {
-                self.velocity_model
-                    .update(particle, &best_global, self.dimensions);
+                self.velocity_model.update(
+                    particle,
+                    &best_global,
+                    self.dimensions,
+                    &mut self.rng,
+                );
             }
         }
         Ok(best_global)
@@ -115,13 +134,15 @@ impl Pso {
     /// # Returns
     ///
     /// A vector containing the initialized particles.
-    fn init_swarm(&self) -> Vec<Particle> {
+    fn init_swarm(&mut self) -> Vec<Particle> {
+        let dimensions = self.dimensions;
+        let rng = &mut self.rng;
         (0..self.swarm_size)
             .map(|_| {
                 let mut position: Weights =
-                    Array1::<f64>::random(self.dimensions, Uniform::new(0., 1.).unwrap());
+                    Array1::<f64>::random_using(dimensions, Uniform::new(0., 1.).unwrap(), rng);
                 self.velocity_model.repair_position(&mut position);
-                let velocity: Momentums = Array1::<f64>::zeros(self.dimensions);
+                let velocity: Momentums = Array1::<f64>::zeros(dimensions);
 
                 Particle::new(&position, &velocity)
             })

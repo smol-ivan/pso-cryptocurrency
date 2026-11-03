@@ -28,5 +28,9 @@ pub enum Commands {
         /// Sobrescribir el target_return definido en el config (opcional)
         #[arg(short, long)]
         target_return: Option<f64>,
+
+        /// Sobrescribir la semilla definida en el config (opcional)
+        #[arg(short, long)]
+        seed: Option<u64>,
     },
 }

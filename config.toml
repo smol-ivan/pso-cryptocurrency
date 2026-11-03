@@ -5,3 +5,5 @@ start = 2024-01-01T00:00:00Z
 end = 2024-01-10T23:59:59Z
 swarm_size = 3
 target_return = 0.01
+iterations = 100
+seed = 42
