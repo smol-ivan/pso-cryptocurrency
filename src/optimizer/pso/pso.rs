@@ -84,8 +84,9 @@ impl Pso {
     fn init_swarm(&self) -> Vec<Particle> {
         (0..self.swarm_size)
             .map(|_| {
-                let position: Weights =
+                let mut position: Weights =
                     Array1::<f64>::random(self.dimensions, Uniform::new(0., 1.).unwrap());
+                self.velocity_model.repair_position(&mut position);
                 let velocity: Momentums = Array1::<f64>::zeros(self.dimensions);
 
                 Particle::new(&position, &velocity)
