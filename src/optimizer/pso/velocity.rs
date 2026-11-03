@@ -38,7 +38,7 @@ impl VelocityModel for InertiaM {
 
         let inertia_cmp = self.inertia * &particle.velocity;
         let personal_cmp = self.c1 * &r1 * (&particle.best_position - &particle.position);
-        let social_cmp = self.c2 * &r2 * (&particle.best_position - &best_global.position);
+        let social_cmp = self.c2 * &r2 * (&best_global.position - &particle.best_position);
 
         particle.velocity = inertia_cmp + personal_cmp + social_cmp;
         particle.position += &particle.velocity;
