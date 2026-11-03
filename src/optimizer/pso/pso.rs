@@ -1,3 +1,4 @@
+use anyhow::Result;
 use ndarray::{Array1, Array2};
 use ndarray_rand::RandomExt;
 use ndarray_rand::rand_distr::Uniform;
@@ -46,7 +47,7 @@ impl Pso {
             target_return,
         }
     }
-    pub fn optimization(&self) {
+    pub fn optimization(&self) -> Result<Particle> {
         let mut swarm = self.init_swarm();
         let mut best_global = swarm[0].clone(); // Escoger cualquier particula para empezar
 
@@ -73,7 +74,7 @@ impl Pso {
                     .update(particle, &best_global, self.dimensions);
             }
         }
-        println!("{:#?}", swarm);
+        Ok(best_global)
     }
 
     /// Hello to all my rabies!
