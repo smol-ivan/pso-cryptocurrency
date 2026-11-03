@@ -7,11 +7,17 @@ down:
 psql:
     psql "$DATABASE_URL"
 
-run:
-    cargo run --release
+build:
+    cargo build
 
-dev:
-    cargo run
+dev-bound:
+    cargo run -- target-bounds
+
+dev-single:
+    cargo run -- optimize-single-test
+
+dev-update:
+    cargo run -- update-db
 
 migrate-new nombre:
     sqlx migrate add -r {{nombre}}

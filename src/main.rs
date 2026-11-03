@@ -1,62 +1,83 @@
+mod cli;
 mod config;
 mod domain;
 mod market_data;
 mod optimizer;
 
+use clap::Parser;
 use config::Settings;
 use optimizer::pso::Pso;
-use time::OffsetDateTime;
-use time::macros::datetime;
 use tokio;
 
+use crate::cli::{Cli, Commands};
 use crate::market_data::repository::save_assets;
 use crate::market_data::{dataset::build, provider::download};
-use crate::optimizer::pso::{InertiaM, Variance, VelocityModel};
+use crate::optimizer::pso::{InertiaM, Variance};
 
-use anyhow::{Ok, Result};
-use sqlx::postgres::{PgPool, PgPoolOptions};
-
-
-
+use anyhow::Result;
+use sqlx::postgres::PgPoolOptions;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let args = Cli::parse();
     let settings = Settings::new()?;
-    // // println!("{:#?}", res)
 
+    // TODO: We need a health check to db
     let pool = PgPoolOptions::new()
         .max_connections(2)
         .connect(settings.database_url.as_str())
         .await
         .unwrap();
 
-    let res = download(start, end, &tickers).await?;
-    save_assets(&pool, &res).await?;
-    let dataset = build(&pool, &tickers, start, end).await?;
+    match args.command.unwrap_or(Commands::OptimizeSingleTest {
+        target_return: None,
+    }) {
+        Commands::UpdateDb => {
+            println!("Applying database update");
+            let assets =
+                download(settings.pso.start, settings.pso.end, &settings.pso.tickers).await?;
+            save_assets(&pool, &assets).await?;
+            println!("Database is updated withour any error");
+        }
+        Commands::TargetBounds => {
+            let dataset = build(
+                &pool,
+                &settings.pso.tickers,
+                settings.pso.start,
+                settings.pso.end,
+            )
+            .await?;
+            println!("Target return bounds");
+            println!("MIN: {:?}", dataset.target_return_bounds()?.0);
+            println!("MAX: {:?}", dataset.target_return_bounds()?.1);
+        }
 
-    // println!("Activos {:?}", dataset.assets);
-    // println!("Dimensiones {:?}", dataset.returns.dim());
-    println!("Retornos {:#?}", dataset.returns);
-    println!(
-        "Target return bounds: {:#?}",
-        dataset.target_return_bounds()
-    );
-    // println!("Fechas {:?}", dataset.timestamps.len());
-    let fitness_function = Box::new(Variance::default());
-    let velocity_model = Box::new(InertiaM::default());
-    let returns = dataset.returns;
-    let dimensions = dataset.assets.len();
+        Commands::OptimizeSingleTest { target_return } => {
+            let dataset = build(
+                &pool,
+                &settings.pso.tickers,
+                settings.pso.start,
+                settings.pso.end,
+            )
+            .await?;
+            let target_return = target_return.unwrap_or(settings.pso.target_return);
 
-    let pso = Pso::new(
-        fitness_function,
-        velocity_model,
-        dimensions,
-        swarm_size,
-        returns,
-        target_return,
-    );
+            let pso = Pso::new(
+                Box::new(Variance::default()),
+                Box::new(InertiaM::default()),
+                dataset.assets.len(),
+                settings.pso.swarm_size,
+                dataset.returns,
+                target_return,
+            );
 
-    // pso.optimization();
+            println!(
+                "Starting PSO optimization with target return: {:?}",
+                target_return
+            );
+            pso.optimization();
+        }
+    };
 
     Ok(())
 }
