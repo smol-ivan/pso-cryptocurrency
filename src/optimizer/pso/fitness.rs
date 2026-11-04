@@ -1,6 +1,6 @@
 use ndarray::{Array1, Array2};
 
-use crate::domain::Weights;
+use crate::domain::{Evaluation, Weights};
 
 /// Defines the interface for portfolio risk and fitness evaluation.
 ///
@@ -31,7 +31,16 @@ pub trait FitnessFunction {
     ///
     /// A fitness value representing the portfolio risk combined with
     /// any penalty for failing to meet the target return.
-    fn get_fitness(&self, position: &Weights, returns: &Array2<f64>, target_return: f64) -> f64;
+    fn get_fitness(
+        &self,
+        position: &Weights,
+        returns: &Array2<f64>,
+        target_return: f64,
+    ) -> Evaluation;
+
+    fn name(&self) -> &'static str;
+
+    fn params(&self) -> serde_json::Value;
 }
 
 /// Portfolio fitness function based on variance minimization.
@@ -41,6 +50,7 @@ pub trait FitnessFunction {
 pub struct Variance {
     /// Penalty coefficient applied when the target return is not met.
     pub penalty: f64,
+    pub eps: f64,
 }
 
 impl Default for Variance {
@@ -48,7 +58,10 @@ impl Default for Variance {
     // TODO: Evaluate penalty sensitivity across different return scales
     // and dataset frequencies.
     fn default() -> Self {
-        Self { penalty: 50. }
+        Self {
+            penalty: 50.,
+            eps: 1e-6,
+        }
     }
 }
 
@@ -98,7 +111,12 @@ impl FitnessFunction for Variance {
     /// Portfolio variance plus the weighted target return shortfall penalty.
     // TODO: Validate matrix dimensions, empty inputs, and non-finite values.
     // TODO: Review error handling for invalid portfolio allocations.
-    fn get_fitness(&self, position: &Weights, returns: &Array2<f64>, target_return: f64) -> f64 {
+    fn get_fitness(
+        &self,
+        position: &Weights,
+        returns: &Array2<f64>,
+        target_return: f64,
+    ) -> Evaluation {
         // R * w
         let portfolio_returns = returns.dot(position);
         // expected return
@@ -106,8 +124,27 @@ impl FitnessFunction for Variance {
 
         let risk = self.calculate_risk(portfolio_returns);
 
-        let return_shortfall = (target_return - expected_return).max(0.0);
+        let shortfall = (target_return - expected_return).max(0.0);
 
-        risk + self.penalty * return_shortfall
+        let penalty = self.penalty * shortfall;
+
+        let fitness = risk + penalty;
+
+        Evaluation {
+            fitness,
+            expected_return,
+            risk,
+            penalty,
+            shortfall,
+            feasible: shortfall <= self.eps,
+        }
+    }
+
+    fn name(&self) -> &'static str {
+        "variance"
+    }
+
+    fn params(&self) -> serde_json::Value {
+        serde_json::json!({ "penalty": self.penalty, "eps": self.eps})
     }
 }

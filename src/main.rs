@@ -6,6 +6,8 @@ mod optimizer;
 
 use clap::Parser;
 use config::Settings;
+use ndarray_rand::rand::SeedableRng;
+use ndarray_rand::rand::rngs::StdRng;
 use optimizer::pso::Pso;
 use tokio;
 
@@ -53,7 +55,10 @@ async fn main() -> Result<()> {
             println!("MAX: {:?}", dataset.target_return_bounds()?.1);
         }
 
-        Commands::OptimizeSingleTest { target_return, seed } => {
+        Commands::OptimizeSingleTest {
+            target_return,
+            seed,
+        } => {
             let dataset = build(
                 &pool,
                 &settings.pso.tickers,
@@ -63,6 +68,7 @@ async fn main() -> Result<()> {
             .await?;
             let target_return = target_return.unwrap_or(settings.pso.target_return);
             let seed = seed.unwrap_or(settings.pso.seed);
+            let rng = StdRng::seed_from_u64(seed);
 
             let mut pso = Pso::new(
                 Box::new(Variance::default()),
@@ -72,7 +78,7 @@ async fn main() -> Result<()> {
                 dataset.returns,
                 target_return,
                 settings.pso.iterations,
-                seed,
+                rng,
             );
 
             println!(

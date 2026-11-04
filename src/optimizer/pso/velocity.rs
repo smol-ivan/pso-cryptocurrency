@@ -36,6 +36,9 @@ pub trait VelocityModel {
     ///
     /// * `position` - Mutable particle position to repair.
     fn repair_position(&self, position: &mut Weights);
+
+    fn name(&self) -> &'static str;
+    fn params(&self) -> serde_json::Value;
 }
 
 /// Particle velocity update strategy based on the inertia weight model.
@@ -96,7 +99,7 @@ impl VelocityModel for InertiaM {
 
         let inertia_cmp = self.inertia * &particle.velocity;
         let personal_cmp = self.c1 * &r1 * (&particle.best_position - &particle.position);
-        let social_cmp = self.c2 * &r2 * (&best_global.position - &particle.best_position);
+        let social_cmp = self.c2 * &r2 * (&best_global.position - &particle.position);
 
         particle.velocity = inertia_cmp + personal_cmp + social_cmp;
         particle.position += &particle.velocity;
@@ -133,5 +136,13 @@ impl VelocityModel for InertiaM {
             let n = position.len() as f64;
             position.fill(1. / n);
         }
+    }
+
+    fn name(&self) -> &'static str {
+        "inertia"
+    }
+
+    fn params(&self) -> serde_json::Value {
+        serde_json::json!({ "c1": self.c1, "c2": self.c2, "inertia": self.inertia})
     }
 }

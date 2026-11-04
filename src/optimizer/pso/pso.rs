@@ -74,7 +74,7 @@ impl Pso {
         returns: Array2<f64>,
         target_return: f64,
         iterations: usize,
-        seed: u64,
+        rng: StdRng,
     ) -> Self {
         Pso {
             fitness_function,
@@ -84,7 +84,7 @@ impl Pso {
             returns,
             target_return,
             iterations,
-            rng: StdRng::seed_from_u64(seed),
+            rng,
         }
     }
 
@@ -103,24 +103,24 @@ impl Pso {
         // stopping criterion.
         for _ in 0..self.iterations {
             // evaluar cada particula
-            swarm.iter_mut().for_each(|p| {
-                p.evaluate_fitness(
-                    self.fitness_function.as_ref(),
-                    &self.returns,
-                    self.target_return,
-                )
-            });
+            let improved_pbest = swarm
+                .iter_mut()
+                .map(|p| {
+                    p.evaluate_fitness(
+                        self.fitness_function.as_ref(),
+                        &self.returns,
+                        self.target_return,
+                    )
+                })
+                .filter(|&improved| improved)
+                .count();
 
-            self.find_best_global(&swarm, &mut best_global);
+            let gbest_improved = self.find_best_global(&swarm, &mut best_global);
 
             //TODO: actualizar posicion dada la velocidad y normalizar
             for particle in &mut swarm {
-                self.velocity_model.update(
-                    particle,
-                    &best_global,
-                    self.dimensions,
-                    &mut self.rng,
-                );
+                self.velocity_model
+                    .update(particle, &best_global, self.dimensions, &mut self.rng);
             }
         }
         Ok(best_global)
@@ -158,14 +158,16 @@ impl Pso {
     ///
     /// * `swarm` - Current population of particles.
     /// * `best_global` - Mutable reference to the global best particle.
-    fn find_best_global(&self, swarm: &[Particle], best_global: &mut Particle) {
+    fn find_best_global(&self, swarm: &[Particle], best_global: &mut Particle) -> bool {
         let best_iter = swarm
             .iter()
-            .min_by(|a, b| a.best_value.partial_cmp(&b.best_value).unwrap())
+            .min_by(|a, b| a.best_eval.fitness.total_cmp(&b.best_eval.fitness))
             .unwrap();
 
-        if best_iter.best_value < best_global.best_value {
-            *best_global = best_iter.clone()
+        if best_iter.best_eval.fitness < best_global.best_eval.fitness {
+            *best_global = best_iter.clone();
+            return true;
         }
+        false
     }
 }

@@ -87,7 +87,6 @@ impl Dataset {
     ///
     /// Returns an error if the dataset does not contain valid observations
     /// or assets.
-
     pub fn target_return_bounds(&self) -> Result<(f64, f64)> {
         // TODO: Replace unwrap calls with explicit error handling
         // for empty datasets and invalid return values.

@@ -1862,6 +1862,7 @@ dependencies = [
  "ndarray-rand",
  "openblas-src",
  "serde",
+ "serde_json",
  "sqlx",
  "time",
  "tokio",

@@ -1,7 +1,10 @@
 use ndarray::Array2;
 
 use super::fitness::FitnessFunction;
-use crate::domain::types::{Momentums, Weights};
+use crate::domain::{
+    Evaluation,
+    types::{Momentums, Weights},
+};
 
 /// Represents a particle in the particle swarm optimization algorithm.
 ///
@@ -25,32 +28,11 @@ pub struct Particle {
     /// Best position found by this particle so far.
     pub best_position: Weights,
 
-    /// Best fitness value achieved by this particle.
-    ///
-    /// Initialized to [`f64::INFINITY`] so that the first valid
-    /// fitness evaluation can update it.
-    pub best_value: f64,
+    /// Best Evaluation achieved by this particle.
+    pub best_eval: Evaluation,
 
-    /// Fitness value of the particle's current position.
-    ///
-    /// Initialized to [`f64::INFINITY`] until the first evaluation.
-    pub value: f64,
-}
-
-impl Default for Particle {
-    /// Creates a particle with empty vectors and infinite fitness values.
-    ///
-    /// The particle must be initialized with a valid position and
-    /// velocity before participating in the optimization process.
-    fn default() -> Self {
-        Particle {
-            position: Vec::new().into(),
-            velocity: Vec::new().into(),
-            best_position: Vec::new().into(),
-            best_value: f64::INFINITY,
-            value: f64::INFINITY,
-        }
-    }
+    /// Evaluation of the particle's current position.
+    pub eval: Evaluation,
 }
 
 impl Particle {
@@ -69,8 +51,8 @@ impl Particle {
             position: position.clone(),
             velocity: velocity.clone(),
             best_position: position.clone(),
-            best_value: f64::INFINITY,
-            value: f64::INFINITY,
+            best_eval: Evaluation::default(),
+            eval: Evaluation::default(),
         }
     }
 
@@ -104,16 +86,20 @@ impl Particle {
         function: &dyn FitnessFunction,
         returns: &Array2<f64>,
         target_return: f64,
-    ) {
+    ) -> bool {
         // TODO: Validate particle dimensions against the provided return matrix.
-        let fitness_value = function.get_fitness(&self.position, &returns, target_return);
-
-        self.value = fitness_value;
+        let new_eval = function.get_fitness(&self.position, &returns, target_return);
 
         // TODO: Define how non-finite fitness values should be handled.
-        if fitness_value < self.best_value {
+        let improved = new_eval.fitness < self.best_eval.fitness;
+
+        if improved {
             self.best_position = self.position.clone();
-            self.best_value = fitness_value;
+            self.best_eval = new_eval.clone();
         }
+
+        self.eval = new_eval;
+
+        improved
     }
 }
