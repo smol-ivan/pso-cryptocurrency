@@ -1,22 +1,18 @@
-mod cli;
-mod config;
-mod domain;
-mod market_data;
-mod optimizer;
-
 use clap::Parser;
-use config::Settings;
 use ndarray_rand::rand::SeedableRng;
 use ndarray_rand::rand::rngs::StdRng;
-use optimizer::pso::Pso;
 
-use crate::cli::{Cli, Commands};
-use crate::market_data::repository::save_assets;
-use crate::market_data::{dataset::build, provider::download};
+use pso_cryptocurrency::config::Settings;
+use pso_cryptocurrency::market_data::repository::save_assets;
+use pso_cryptocurrency::market_data::{dataset::build, provider::download};
+use pso_cryptocurrency::optimizer::pso::Pso;
 
 use anyhow::{Context, Result};
 use sqlx::postgres::PgPoolOptions;
 
+mod cli;
+
+use crate::cli::{Cli, Commands};
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Cli::parse();
