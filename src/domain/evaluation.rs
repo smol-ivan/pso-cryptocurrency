@@ -1,4 +1,4 @@
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Evaluation {
     pub fitness: f64,
     pub expected_return: f64,

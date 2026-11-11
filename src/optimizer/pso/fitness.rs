@@ -1,26 +1,24 @@
 use ndarray::{Array1, Array2};
+use serde::Serialize;
 
 use crate::{
     config::VarianceParams,
     domain::{Evaluation, Weights},
 };
 
+pub trait RiskMeasure {
+    fn name(&self) -> &'static str;
+
+    fn params(&self) -> serde_json::Value;
+
+    fn risk(&self, portfolio_returns: &Array1<f64>) -> f64;
+}
+
 /// Defines the interface for portfolio risk and fitness evaluation.
 ///
 /// Implementations provide a risk measure and a fitness function used
 /// by the PSO algorithm to evaluate candidate portfolio allocations.
 pub trait FitnessFunction {
-    /// Calculates the portfolio risk from its historical returns.
-    ///
-    /// # Arguments
-    ///
-    /// * `portfolio_returns` - Historical returns of the portfolio.
-    ///
-    /// # Returns
-    ///
-    /// A scalar value representing the portfolio risk.
-    fn calculate_risk(&self, portfolio_returns: Array1<f64>) -> f64;
-
     /// Evaluates a portfolio allocation against a target return.
     ///
     /// # Arguments
@@ -46,6 +44,84 @@ pub trait FitnessFunction {
     fn params(&self) -> serde_json::Value;
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct PenaltyParams {
+    pub penalty: f64,
+    pub eps: f64,
+}
+
+pub struct VarianceRisk;
+
+impl RiskMeasure for VarianceRisk {
+    fn name(&self) -> &'static str {
+        "variance"
+    }
+
+    fn params(&self) -> serde_json::Value {
+        serde_json::json!({})
+    }
+
+    fn risk(&self, portfolio_returns: &Array1<f64>) -> f64 {
+        let mean = portfolio_returns.mean().unwrap_or(0.0);
+
+        portfolio_returns
+            .mapv(|r| (r - mean).powi(2))
+            .mean()
+            .unwrap_or(0.0)
+    }
+}
+
+pub struct PenalizedFitness {
+    pub risk: Box<dyn RiskMeasure>,
+    pub params: PenaltyParams,
+}
+
+impl PenalizedFitness {
+    pub fn new(risk: Box<dyn RiskMeasure>, params: PenaltyParams) -> Self {
+        Self { risk, params }
+    }
+}
+
+impl FitnessFunction for PenalizedFitness {
+    fn get_fitness(
+        &self,
+        position: &Weights,
+        returns: &Array2<f64>,
+        target_return: f64,
+    ) -> Evaluation {
+        let portfolio_returns = returns.dot(position);
+        let expected_return = portfolio_returns.mean().unwrap_or(0.0);
+        let risk = self.risk.risk(&portfolio_returns);
+        let shortfall = (target_return - expected_return).max(0.0);
+        let penalty = self.params.penalty * shortfall;
+        let fitness = risk + penalty;
+
+        Evaluation {
+            fitness,
+            expected_return,
+            risk,
+            penalty,
+            shortfall,
+            feasible: shortfall <= self.params.eps && fitness.is_finite(),
+        }
+    }
+
+    fn name(&self) -> &'static str {
+        "penalized"
+    }
+
+    fn params(&self) -> serde_json::Value {
+        serde_json::json!({
+            "penalty": self.params.penalty,
+            "eps": self.params.eps,
+            "risk": {
+                "name": self.risk.name(),
+                "params": self.risk.params(),
+            },
+        })
+    }
+}
+
 /// Portfolio fitness function based on variance minimization.
 ///
 /// The fitness value combines portfolio variance with a penalty for
@@ -64,68 +140,17 @@ impl Variance {
 }
 
 impl FitnessFunction for Variance {
-    /// Calculates the portfolio variance from its historical returns.
-    ///
-    /// Variance is computed as the mean squared deviation of portfolio
-    /// returns from their arithmetic mean.
-    ///
-    /// # Arguments
-    ///
-    /// * `portfolio_returns` - Historical portfolio returns.
-    ///
-    /// # Returns
-    ///
-    /// The population variance of the portfolio returns.
-    fn calculate_risk(&self, portfolio_returns: Array1<f64>) -> f64 {
-        // TODO: This could cause problems in edge cases
-        let mean = portfolio_returns.mean().unwrap_or(0.0);
-
-        portfolio_returns
-            .mapv(|r| (r - mean).powi(2))
-            .mean()
-            .unwrap_or(0.0)
-    }
-
-    // Evaluates a portfolio allocation using variance and a target return penalty.
-    ///
-    /// Portfolio returns are calculated by multiplying the asset return matrix
-    /// by the portfolio weight vector. The fitness value combines portfolio
-    /// variance with a penalty proportional to any shortfall below the
-    /// target return.
-    ///
-    /// The penalty is one-sided: portfolio allocations exceeding the target
-    /// return receive no additional penalty.
-    ///
-    /// The fitness function is designed for minimization.
-    ///
-    /// # Arguments
-    ///
-    /// * `position` - Portfolio weight vector.
-    /// * `returns` - Historical asset return matrix.
-    /// * `target_return` - Minimum expected portfolio return.
-    ///
-    /// # Returns
-    ///
-    /// Portfolio variance plus the weighted target return shortfall penalty.
-    // TODO: Validate matrix dimensions, empty inputs, and non-finite values.
-    // TODO: Review error handling for invalid portfolio allocations.
     fn get_fitness(
         &self,
         position: &Weights,
         returns: &Array2<f64>,
         target_return: f64,
     ) -> Evaluation {
-        // R * w
         let portfolio_returns = returns.dot(position);
-        // expected return
         let expected_return = portfolio_returns.mean().unwrap_or(0.0);
-
-        let risk = self.calculate_risk(portfolio_returns);
-
+        let risk = variance(&portfolio_returns);
         let shortfall = (target_return - expected_return).max(0.0);
-
         let penalty = self.params.penalty * shortfall;
-
         let fitness = risk + penalty;
 
         Evaluation {
@@ -144,5 +169,50 @@ impl FitnessFunction for Variance {
 
     fn params(&self) -> serde_json::Value {
         serde_json::to_value(&self.params).expect("params serialize")
+    }
+}
+
+fn variance(portfolio_returns: &Array1<f64>) -> f64 {
+    // TODO: This could cause problems in edge cases
+    let mean = portfolio_returns.mean().unwrap_or(0.0);
+
+    portfolio_returns
+        .mapv(|r| (r - mean).powi(2))
+        .mean()
+        .unwrap_or(0.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use ndarray::{Array2, array};
+
+    use super::*;
+
+    #[test]
+    fn penalized_variance_matches_legacy_variance() {
+        let returns: Array2<f64> = array![
+            [0.01, 0.02, -0.01],
+            [0.03, -0.02, 0.04],
+            [-0.01, 0.01, 0.02],
+            [0.02, 0.03, -0.03],
+        ];
+        let weights = array![0.2, 0.5, 0.3];
+        let params = VarianceParams {
+            penalty: 50.0,
+            eps: 1e-6,
+        };
+        let legacy = Variance::new(params.clone());
+        let replacement = PenalizedFitness::new(
+            Box::new(VarianceRisk),
+            PenaltyParams {
+                penalty: params.penalty,
+                eps: params.eps,
+            },
+        );
+
+        assert_eq!(
+            legacy.get_fitness(&weights, &returns, 0.02),
+            replacement.get_fitness(&weights, &returns, 0.02)
+        );
     }
 }
