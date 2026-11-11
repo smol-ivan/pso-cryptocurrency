@@ -1,10 +1,7 @@
 use ndarray::{Array1, Array2};
 use serde::Serialize;
 
-use crate::{
-    config::VarianceParams,
-    domain::{Evaluation, Weights},
-};
+use crate::domain::{Evaluation, Weights};
 
 pub trait RiskMeasure {
     fn name(&self) -> &'static str;
@@ -122,66 +119,6 @@ impl FitnessFunction for PenalizedFitness {
     }
 }
 
-/// Portfolio fitness function based on variance minimization.
-///
-/// The fitness value combines portfolio variance with a penalty for
-/// failing to achieve the specified target return.
-pub struct Variance {
-    /// Penalty coefficient applied when the target return is not met.
-    params: VarianceParams,
-}
-
-impl Variance {
-    /// Create a Variance instance with values given via
-    /// VarianceParams
-    pub fn new(params: VarianceParams) -> Self {
-        Self { params }
-    }
-}
-
-impl FitnessFunction for Variance {
-    fn get_fitness(
-        &self,
-        position: &Weights,
-        returns: &Array2<f64>,
-        target_return: f64,
-    ) -> Evaluation {
-        let portfolio_returns = returns.dot(position);
-        let expected_return = portfolio_returns.mean().unwrap_or(0.0);
-        let risk = variance(&portfolio_returns);
-        let shortfall = (target_return - expected_return).max(0.0);
-        let penalty = self.params.penalty * shortfall;
-        let fitness = risk + penalty;
-
-        Evaluation {
-            fitness,
-            expected_return,
-            risk,
-            penalty,
-            shortfall,
-            feasible: shortfall <= self.params.eps,
-        }
-    }
-
-    fn name(&self) -> &'static str {
-        "variance"
-    }
-
-    fn params(&self) -> serde_json::Value {
-        serde_json::to_value(&self.params).expect("params serialize")
-    }
-}
-
-fn variance(portfolio_returns: &Array1<f64>) -> f64 {
-    // TODO: This could cause problems in edge cases
-    let mean = portfolio_returns.mean().unwrap_or(0.0);
-
-    portfolio_returns
-        .mapv(|r| (r - mean).powi(2))
-        .mean()
-        .unwrap_or(0.0)
-}
-
 #[cfg(test)]
 mod tests {
     use ndarray::{Array2, array};
@@ -197,23 +134,32 @@ mod tests {
             [0.02, 0.03, -0.03],
         ];
         let weights = array![0.2, 0.5, 0.3];
-        let params = VarianceParams {
-            penalty: 50.0,
-            eps: 1e-6,
-        };
-        let legacy = Variance::new(params.clone());
         let replacement = PenalizedFitness::new(
             Box::new(VarianceRisk),
             PenaltyParams {
-                penalty: params.penalty,
-                eps: params.eps,
+                penalty: 50.0,
+                eps: 1e-6,
             },
         );
 
-        assert_eq!(
-            legacy.get_fitness(&weights, &returns, 0.02),
-            replacement.get_fitness(&weights, &returns, 0.02)
-        );
+        let portfolio_returns = returns.dot(&weights);
+        let expected_return = portfolio_returns.mean().unwrap_or(0.0);
+        let risk = portfolio_returns
+            .mapv(|r| (r - expected_return).powi(2))
+            .mean()
+            .unwrap_or(0.0);
+        let shortfall = (0.02 - expected_return).max(0.0);
+        let penalty = 50.0 * shortfall;
+        let expected = Evaluation {
+            fitness: risk + penalty,
+            expected_return,
+            risk,
+            penalty,
+            shortfall,
+            feasible: shortfall <= 1e-6,
+        };
+
+        assert_eq!(replacement.get_fitness(&weights, &returns, 0.02), expected);
     }
 
     #[test]

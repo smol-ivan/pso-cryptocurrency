@@ -177,9 +177,55 @@ mod tests {
     use ndarray::array;
 
     use super::*;
-    use crate::config::{InertiaParams, VarianceParams};
-    use crate::optimizer::pso::fitness::{PenalizedFitness, PenaltyParams, Variance, VarianceRisk};
+    use crate::config::InertiaParams;
+    use crate::domain::Evaluation;
+    use crate::optimizer::pso::fitness::{
+        FitnessFunction, PenalizedFitness, PenaltyParams, VarianceRisk,
+    };
     use crate::optimizer::pso::velocity::InertiaM;
+
+    struct LegacyVariance {
+        penalty: f64,
+        eps: f64,
+    }
+
+    impl FitnessFunction for LegacyVariance {
+        fn get_fitness(
+            &self,
+            position: &Weights,
+            returns: &Array2<f64>,
+            target_return: f64,
+        ) -> Evaluation {
+            let portfolio_returns = returns.dot(position);
+            let expected_return = portfolio_returns.mean().unwrap_or(0.0);
+            let risk = portfolio_returns
+                .mapv(|r| (r - expected_return).powi(2))
+                .mean()
+                .unwrap_or(0.0);
+            let shortfall = (target_return - expected_return).max(0.0);
+            let penalty = self.penalty * shortfall;
+
+            Evaluation {
+                fitness: risk + penalty,
+                expected_return,
+                risk,
+                penalty,
+                shortfall,
+                feasible: shortfall <= self.eps,
+            }
+        }
+
+        fn name(&self) -> &'static str {
+            "variance"
+        }
+
+        fn params(&self) -> serde_json::Value {
+            serde_json::json!({
+                "penalty": self.penalty,
+                "eps": self.eps,
+            })
+        }
+    }
 
     #[test]
     fn replacement_preserves_seeded_optimization_result() {
@@ -194,10 +240,10 @@ mod tests {
             c2: 0.9,
             inertia: 0.8,
         };
-        let legacy = Variance::new(VarianceParams {
+        let legacy = LegacyVariance {
             penalty: 50.0,
             eps: 1e-6,
-        });
+        };
         let replacement = PenalizedFitness::new(
             Box::new(VarianceRisk),
             PenaltyParams {

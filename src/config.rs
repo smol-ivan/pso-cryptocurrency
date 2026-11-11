@@ -6,25 +6,6 @@ use time::OffsetDateTime;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
-pub struct VarianceParams {
-    pub penalty: f64,
-    pub eps: f64,
-}
-
-impl Default for VarianceParams {
-    /// Creates a variance params with a default penalty of 50.0.
-    // TODO: Evaluate penalty sensitivity across different return scales
-    // and dataset frequencies.
-    fn default() -> Self {
-        Self {
-            penalty: 50.0,
-            eps: 1e-6,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
 pub struct InertiaParams {
     /// Cognitive acceleration coefficient.
     pub c1: f64,
