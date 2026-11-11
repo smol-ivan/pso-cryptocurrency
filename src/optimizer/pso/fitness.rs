@@ -1,6 +1,9 @@
 use ndarray::{Array1, Array2};
 
-use crate::domain::{Evaluation, Weights};
+use crate::{
+    config::VarianceParams,
+    domain::{Evaluation, Weights},
+};
 
 /// Defines the interface for portfolio risk and fitness evaluation.
 ///
@@ -49,19 +52,14 @@ pub trait FitnessFunction {
 /// failing to achieve the specified target return.
 pub struct Variance {
     /// Penalty coefficient applied when the target return is not met.
-    pub penalty: f64,
-    pub eps: f64,
+    params: VarianceParams,
 }
 
-impl Default for Variance {
-    /// Creates a variance fitness function with a default penalty of 50.0.
-    // TODO: Evaluate penalty sensitivity across different return scales
-    // and dataset frequencies.
-    fn default() -> Self {
-        Self {
-            penalty: 50.,
-            eps: 1e-6,
-        }
+impl Variance {
+    /// Create a Variance instance with values given via
+    /// VarianceParams
+    pub fn new(params: VarianceParams) -> Self {
+        Self { params }
     }
 }
 
@@ -126,7 +124,7 @@ impl FitnessFunction for Variance {
 
         let shortfall = (target_return - expected_return).max(0.0);
 
-        let penalty = self.penalty * shortfall;
+        let penalty = self.params.penalty * shortfall;
 
         let fitness = risk + penalty;
 
@@ -136,7 +134,7 @@ impl FitnessFunction for Variance {
             risk,
             penalty,
             shortfall,
-            feasible: shortfall <= self.eps,
+            feasible: shortfall <= self.params.eps,
         }
     }
 
@@ -145,6 +143,6 @@ impl FitnessFunction for Variance {
     }
 
     fn params(&self) -> serde_json::Value {
-        serde_json::json!({ "penalty": self.penalty, "eps": self.eps})
+        serde_json::to_value(&self.params).expect("params serialize")
     }
 }

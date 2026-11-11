@@ -1,4 +1,5 @@
 use super::particle::Particle;
+use crate::config::InertiaParams;
 use crate::domain::types::Weights;
 use ndarray_rand::RandomExt;
 
@@ -47,29 +48,12 @@ pub trait VelocityModel {
 /// best position, and the global best position to determine its
 /// next movement.
 pub struct InertiaM {
-    /// Cognitive acceleration coefficient.
-    pub c1: f64,
-
-    /// Social acceleration coefficient.
-    pub c2: f64,
-
-    /// Inertia weight controlling the influence of the previous velocity.
-    pub inertia: f64,
+    params: InertiaParams,
 }
 
-impl Default for InertiaM {
-    /// Creates an inertia-based velocity model with default coefficients.
-    ///
-    /// The default configuration uses:
-    /// - Cognitive coefficient: 0.5.
-    /// - Social coefficient: 0.9.
-    /// - Inertia weight: 0.8.
-    fn default() -> Self {
-        Self {
-            c1: 0.5,
-            c2: 0.9,
-            inertia: 0.8,
-        }
+impl InertiaM {
+    pub fn new(params: InertiaParams) -> Self {
+        InertiaM { params }
     }
 }
 
@@ -97,9 +81,9 @@ impl VelocityModel for InertiaM {
         let r1 = Array1::<f64>::random_using(dimension, Uniform::new(0.0, 1.0).unwrap(), rng);
         let r2 = Array1::<f64>::random_using(dimension, Uniform::new(0.0, 1.0).unwrap(), rng);
 
-        let inertia_cmp = self.inertia * &particle.velocity;
-        let personal_cmp = self.c1 * &r1 * (&particle.best_position - &particle.position);
-        let social_cmp = self.c2 * &r2 * (&best_global.position - &particle.position);
+        let inertia_cmp = self.params.inertia * &particle.velocity;
+        let personal_cmp = self.params.c1 * &r1 * (&particle.best_position - &particle.position);
+        let social_cmp = self.params.c2 * &r2 * (&best_global.position - &particle.position);
 
         particle.velocity = inertia_cmp + personal_cmp + social_cmp;
         particle.position += &particle.velocity;
@@ -143,6 +127,6 @@ impl VelocityModel for InertiaM {
     }
 
     fn params(&self) -> serde_json::Value {
-        serde_json::json!({ "c1": self.c1, "c2": self.c2, "inertia": self.inertia})
+        serde_json::to_value(&self.params).expect("params serialize")
     }
 }

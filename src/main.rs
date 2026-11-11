@@ -71,8 +71,8 @@ async fn main() -> Result<()> {
             let rng = StdRng::seed_from_u64(seed);
 
             let mut pso = Pso::new(
-                Box::new(Variance::default()),
-                Box::new(InertiaM::default()),
+                Box::new(Variance::new(settings.pso.fitness)),
+                Box::new(InertiaM::new(settings.pso.velocity)),
                 dataset.assets.len(),
                 settings.pso.swarm_size,
                 dataset.returns,
