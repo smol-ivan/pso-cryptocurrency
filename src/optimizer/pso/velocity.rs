@@ -1,7 +1,7 @@
 use super::particle::Particle;
-use crate::config::InertiaParams;
 use crate::domain::types::Weights;
 use ndarray_rand::RandomExt;
+use serde::{Deserialize, Serialize};
 
 use ndarray::Array1;
 
@@ -14,7 +14,7 @@ use ndarray_rand::rand_distr::Uniform;
 /// evolve during the PSO optimization process. They also provide
 /// a mechanism to repair positions according to the search-space
 /// constraints.
-pub trait VelocityModel {
+pub trait VelocityModel: Send + Sync {
     /// Updates a particle's velocity and position.
     ///
     /// # Arguments
@@ -40,6 +40,29 @@ pub trait VelocityModel {
 
     fn name(&self) -> &'static str;
     fn params(&self) -> serde_json::Value;
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct InertiaParams {
+    /// Cognitive acceleration coefficient.
+    pub c1: f64,
+
+    /// Social acceleration coefficient.
+    pub c2: f64,
+
+    /// Inertia weight controlling the influence of the previous velocity.
+    pub inertia: f64,
+}
+
+impl Default for InertiaParams {
+    fn default() -> Self {
+        Self {
+            c1: 0.5,
+            c2: 0.9,
+            inertia: 0.8,
+        }
+    }
 }
 
 /// Particle velocity update strategy based on the inertia weight model.
@@ -83,7 +106,7 @@ impl VelocityModel for InertiaM {
 
         let inertia_cmp = self.params.inertia * &particle.velocity;
         let personal_cmp = self.params.c1 * &r1 * (&particle.best_position - &particle.position);
-        let social_cmp = self.params.c2 * &r2 * (&best_global.position - &particle.position);
+        let social_cmp = self.params.c2 * &r2 * (&best_global.best_position - &particle.position);
 
         particle.velocity = inertia_cmp + personal_cmp + social_cmp;
         particle.position += &particle.velocity;

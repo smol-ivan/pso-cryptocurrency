@@ -1,9 +1,9 @@
 use ndarray::{Array1, Array2};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::domain::{Evaluation, Weights};
 
-pub trait RiskMeasure {
+pub trait RiskMeasure: Send + Sync {
     fn name(&self) -> &'static str;
 
     fn params(&self) -> serde_json::Value;
@@ -15,7 +15,7 @@ pub trait RiskMeasure {
 ///
 /// Implementations provide a risk measure and a fitness function used
 /// by the PSO algorithm to evaluate candidate portfolio allocations.
-pub trait FitnessFunction {
+pub trait FitnessFunction: Send + Sync {
     /// Evaluates a portfolio allocation against a target return.
     ///
     /// # Arguments
@@ -41,10 +41,20 @@ pub trait FitnessFunction {
     fn params(&self) -> serde_json::Value;
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct PenaltyParams {
     pub penalty: f64,
     pub eps: f64,
+}
+
+impl Default for PenaltyParams {
+    fn default() -> Self {
+        Self {
+            penalty: 50.0,
+            eps: 1e-6,
+        }
+    }
 }
 
 pub struct VarianceRisk;

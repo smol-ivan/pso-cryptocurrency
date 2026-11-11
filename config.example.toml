@@ -1,0 +1,30 @@
+# DATABASE_URL is intentionally not stored in this file.
+
+[database]
+max_connections = 2
+
+[dataset]
+tickers = ["AAPL", "NVDA"]
+start = 2024-01-01T00:00:00Z
+end = 2024-01-10T23:59:59Z
+
+[pso]
+swarm_size = 45
+iterations = 125
+seed = 42
+
+[pso.fitness]
+penalty = 50.0
+eps = 1e-6
+
+[pso.fitness.risk]
+kind = "variance"
+
+[pso.velocity]
+kind = "inertia"
+c1 = 0.5
+c2 = 0.9
+inertia = 0.8
+
+[single_test]
+target_return = 0.01

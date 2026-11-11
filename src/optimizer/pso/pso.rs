@@ -177,8 +177,8 @@ mod tests {
     use ndarray::array;
 
     use super::*;
-    use crate::config::InertiaParams;
     use crate::domain::Evaluation;
+    use crate::optimizer::pso::InertiaParams;
     use crate::optimizer::pso::fitness::{
         FitnessFunction, PenalizedFitness, PenaltyParams, VarianceRisk,
     };
