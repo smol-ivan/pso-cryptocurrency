@@ -122,6 +122,73 @@ impl Pso {
                 self.velocity_model
                     .update(particle, &best_global, self.dimensions, &mut self.rng);
             }
+
+            #[cfg(test)]
+            mod tests {
+                use ndarray::array;
+
+                use super::*;
+                use crate::config::{InertiaParams, VarianceParams};
+                use crate::optimizer::pso::fitness::{
+                    PenalizedFitness, PenaltyParams, Variance, VarianceRisk,
+                };
+                use crate::optimizer::pso::velocity::InertiaM;
+
+                #[test]
+                fn replacement_preserves_seeded_optimization_result() {
+                    let returns = array![
+                        [0.01, 0.02, -0.01],
+                        [0.03, -0.02, 0.04],
+                        [-0.01, 0.01, 0.02],
+                        [0.02, 0.03, -0.03],
+                    ];
+                    let velocity = InertiaParams {
+                        c1: 0.5,
+                        c2: 0.9,
+                        inertia: 0.8,
+                    };
+                    let legacy = Variance::new(VarianceParams {
+                        penalty: 50.0,
+                        eps: 1e-6,
+                    });
+                    let replacement = PenalizedFitness::new(
+                        Box::new(VarianceRisk),
+                        PenaltyParams {
+                            penalty: 50.0,
+                            eps: 1e-6,
+                        },
+                    );
+
+                    let mut legacy_pso = Pso::new(
+                        Box::new(legacy),
+                        Box::new(InertiaM::new(velocity.clone())),
+                        3,
+                        5,
+                        returns.clone(),
+                        0.02,
+                        10,
+                        StdRng::seed_from_u64(7),
+                    );
+                    let mut replacement_pso = Pso::new(
+                        Box::new(replacement),
+                        Box::new(InertiaM::new(velocity)),
+                        3,
+                        5,
+                        returns,
+                        0.02,
+                        10,
+                        StdRng::seed_from_u64(7),
+                    );
+
+                    let legacy_best = legacy_pso.optimization().unwrap();
+                    let replacement_best = replacement_pso.optimization().unwrap();
+
+                    assert_eq!(
+                        legacy_best.best_eval.fitness,
+                        replacement_best.best_eval.fitness
+                    );
+                }
+            }
         }
         Ok(best_global)
     }

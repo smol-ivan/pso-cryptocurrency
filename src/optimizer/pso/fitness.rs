@@ -215,4 +215,30 @@ mod tests {
             replacement.get_fitness(&weights, &returns, 0.02)
         );
     }
+
+    #[test]
+    fn params_report_effective_values_for_risk_and_fitness() {
+        let risk = VarianceRisk;
+        assert_eq!(risk.name(), "variance");
+        assert_eq!(risk.params(), serde_json::json!({}));
+
+        let fitness = PenalizedFitness::new(
+            Box::new(risk),
+            PenaltyParams {
+                penalty: 25.0,
+                eps: 0.0001,
+            },
+        );
+        assert_eq!(
+            fitness.params(),
+            serde_json::json!({
+                "penalty": 25.0,
+                "eps": 0.0001,
+                "risk": {
+                    "name": "variance",
+                    "params": {},
+                },
+            })
+        );
+    }
 }

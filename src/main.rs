@@ -5,7 +5,7 @@ mod market_data;
 mod optimizer;
 
 use clap::Parser;
-use config::Settings;
+use config::{FitnessConfig, RiskConfig, Settings};
 use ndarray_rand::rand::SeedableRng;
 use ndarray_rand::rand::rngs::StdRng;
 use optimizer::pso::Pso;
@@ -14,7 +14,7 @@ use tokio;
 use crate::cli::{Cli, Commands};
 use crate::market_data::repository::save_assets;
 use crate::market_data::{dataset::build, provider::download};
-use crate::optimizer::pso::{InertiaM, Variance};
+use crate::optimizer::pso::{InertiaM, PenalizedFitness, PenaltyParams, VarianceRisk};
 
 use anyhow::Result;
 use sqlx::postgres::PgPoolOptions;
@@ -71,8 +71,17 @@ async fn main() -> Result<()> {
             let rng = StdRng::seed_from_u64(seed);
 
             let mut pso = Pso::new(
-                Box::new(Variance::new(settings.pso.fitness)),
-                Box::new(InertiaM::new(settings.pso.velocity)),
+                Box::new(match settings.pso.fitness {
+                    FitnessConfig::Penalized {
+                        penalty,
+                        eps,
+                        risk: RiskConfig::Variance,
+                    } => PenalizedFitness::new(
+                        Box::new(VarianceRisk),
+                        PenaltyParams { penalty, eps },
+                    ),
+                }),
+                Box::new(InertiaM::new(settings.pso.velocity.into())),
                 dataset.assets.len(),
                 settings.pso.swarm_size,
                 dataset.returns,

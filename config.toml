@@ -7,3 +7,17 @@ swarm_size = 3
 target_return = 0.01
 iterations = 100
 seed = 42
+
+[pso.fitness]
+type = "penalized"
+penalty = 50.0
+eps = 0.000001
+
+[pso.fitness.risk]
+type = "variance"
+
+[pso.velocity]
+type = "inertia"
+c1 = 0.5
+c2 = 0.9
+inertia = 0.8
