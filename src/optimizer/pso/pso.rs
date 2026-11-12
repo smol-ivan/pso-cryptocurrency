@@ -2,17 +2,43 @@ use anyhow::Result;
 use ndarray::{Array1, Array2};
 use ndarray_rand::RandomExt;
 use ndarray_rand::rand_distr::Uniform;
+use std::time::{Duration, Instant};
 
-use ndarray_rand::rand::SeedableRng;
 use ndarray_rand::rand::rngs::StdRng;
 
 use super::fitness::FitnessFunction;
 use super::particle::Particle;
 use super::velocity::VelocityModel;
-use crate::domain::types::{Momentums, Weights};
+use crate::{
+    domain::types::{Momentums, Weights},
+    optimizer::pso::{RunRecorder, recorder::IterationSnapshot},
+};
 
 // TODO: Define how non-finite fitness values are handled
 // during global best selection.
+
+/// Why a run stopped
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StopReason {
+    MaxIterations,
+}
+
+/// Outcome of a complete PSO run.
+#[derive(Debug)]
+pub struct RunResult {
+    /// Global best particle found
+    pub best: Particle,
+
+    /// Iterations actually executed
+    pub iterations_run: usize,
+
+    /// Total number of fitness evaluations
+    pub total_evals: usize,
+
+    /// Wall-clock duration of the whole run
+    pub duration: Duration,
+    pub stop_reason: StopReason,
+}
 
 /// Particle swarm optimization engine for portfolio optimization.
 ///
@@ -95,15 +121,17 @@ impl Pso {
     /// velocity model over a fixed number of iterations.
     ///
     /// Particle fitness is minimized throughout the optimization process.
-    pub fn optimization(&mut self) -> Result<Particle> {
+    pub fn optimization(&mut self, recorder: &mut dyn RunRecorder) -> Result<RunResult> {
+        let run_start = Instant::now();
         let mut swarm = self.init_swarm();
         let mut best_global = swarm[0].clone(); // Escoger cualquier particula para empezar
 
         // TODO: Replace the fixed iteration count with a configurable
         // stopping criterion.
-        for _ in 0..self.iterations {
+        for iter in 0..self.iterations {
+            let iter_start = Instant::now();
             // evaluar cada particula
-            let improved_pbest = swarm
+            let pbest_improved = swarm
                 .iter_mut()
                 .map(|p| {
                     p.evaluate_fitness(
@@ -117,13 +145,29 @@ impl Pso {
 
             let gbest_improved = self.find_best_global(&swarm, &mut best_global);
 
+            // Snapshot point: after evaluation and gbest update, before moving.
+            recorder.on_iteration(&IterationSnapshot {
+                iter,
+                swarm: &swarm,
+                gbest: &best_global,
+                gbest_improved,
+                pbest_improved,
+                elapsed: iter_start.elapsed(),
+            });
+
             //TODO: actualizar posicion dada la velocidad y normalizar
             for particle in &mut swarm {
                 self.velocity_model
                     .update(particle, &best_global, self.dimensions, &mut self.rng);
             }
         }
-        Ok(best_global)
+        Ok(RunResult {
+            best: best_global,
+            iterations_run: self.iterations,
+            total_evals: self.iterations * self.swarm_size,
+            duration: run_start.elapsed(),
+            stop_reason: StopReason::MaxIterations,
+        })
     }
 
     /// Initializes the particle swarm.

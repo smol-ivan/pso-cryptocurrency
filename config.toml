@@ -7,11 +7,12 @@ start = 2024-01-01T00:00:00Z
 end = 2024-01-10T23:59:59Z
 
 [pso]
-swarm_size = 3
+swarm_size = 50
 iterations = 100
 seed = 42
 
 [pso.fitness]
+# TODO: Investigate best way to determinate the value or scale for penalty 
 penalty = 50.0
 eps = 0.000001
 

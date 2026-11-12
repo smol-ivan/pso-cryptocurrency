@@ -5,7 +5,7 @@ use ndarray_rand::rand::rngs::StdRng;
 use pso_cryptocurrency::config::Settings;
 use pso_cryptocurrency::market_data::repository::save_assets;
 use pso_cryptocurrency::market_data::{dataset::build, provider::download};
-use pso_cryptocurrency::optimizer::pso::Pso;
+use pso_cryptocurrency::optimizer::pso::{MemoryRecorder, Pso};
 
 use anyhow::{Context, Result};
 use sqlx::postgres::PgPoolOptions;
@@ -68,6 +68,8 @@ async fn main() -> Result<()> {
             let seed = seed.unwrap_or(settings.pso.seed);
             let rng = StdRng::seed_from_u64(seed);
 
+            let mut recorder = MemoryRecorder::new(true);
+
             let mut pso = Pso::new(
                 settings.pso.fitness.build(),
                 settings.pso.velocity.build(),
@@ -83,7 +85,11 @@ async fn main() -> Result<()> {
                 "Starting PSO optimization with target return: {:?}, seed: {}",
                 target_return, seed
             );
-            let best_p = pso.optimization()?;
+            let result = pso.optimization(&mut recorder)?;
+            println!(
+                "Optimization finished after {} iterations with fitness {:?}",
+                result.iterations_run, result.best.best_eval.fitness
+            );
         }
     };
 

@@ -3,7 +3,8 @@ use ndarray_rand::rand::SeedableRng;
 use ndarray_rand::rand::rngs::StdRng;
 use pso_cryptocurrency::domain::{Evaluation, Weights};
 use pso_cryptocurrency::optimizer::pso::{
-    FitnessFunction, InertiaM, InertiaParams, PenalizedFitness, PenaltyParams, Pso, VarianceRisk,
+    FitnessFunction, InertiaM, InertiaParams, MemoryRecorder, NoopRecorder, PenalizedFitness,
+    PenaltyParams, Pso, StopReason, VarianceRisk,
 };
 
 struct LegacyVariance {
@@ -94,11 +95,54 @@ fn replacement_preserves_seeded_optimization_result() {
         StdRng::seed_from_u64(7),
     );
 
-    let legacy_best = legacy_pso.optimization().unwrap();
-    let replacement_best = replacement_pso.optimization().unwrap();
+    let mut legacy_recorder = NoopRecorder;
+    let mut replacement_recorder = NoopRecorder;
+    let legacy_best = legacy_pso.optimization(&mut legacy_recorder).unwrap();
+    let replacement_best = replacement_pso
+        .optimization(&mut replacement_recorder)
+        .unwrap();
 
     assert_eq!(
-        legacy_best.best_eval.fitness,
-        replacement_best.best_eval.fitness
+        legacy_best.best.best_eval.fitness,
+        replacement_best.best.best_eval.fitness
     );
+}
+
+#[test]
+fn recorder_captures_each_iteration_and_particle() {
+    let returns = array![
+        [0.01, 0.02, -0.01],
+        [0.03, -0.02, 0.04],
+        [-0.01, 0.01, 0.02],
+        [0.02, 0.03, -0.03],
+    ];
+    let mut pso = Pso::new(
+        Box::new(PenalizedFitness::new(
+            Box::new(VarianceRisk),
+            PenaltyParams {
+                penalty: 50.0,
+                eps: 1e-6,
+            },
+        )),
+        Box::new(InertiaM::new(InertiaParams::default())),
+        3,
+        4,
+        returns,
+        0.02,
+        6,
+        StdRng::seed_from_u64(7),
+    );
+    let mut recorder = MemoryRecorder::new(true);
+
+    let result = pso.optimization(&mut recorder).unwrap();
+
+    assert_eq!(result.iterations_run, 6);
+    assert_eq!(result.total_evals, 24);
+    assert_eq!(result.stop_reason, StopReason::MaxIterations);
+    assert_eq!(recorder.iterations.len(), 6);
+    assert_eq!(recorder.particles.len(), 24);
+    assert_eq!(recorder.iterations[0].iter, 0);
+    assert_eq!(recorder.iterations[5].iter, 5);
+    assert_eq!(recorder.particles[0].iter, 0);
+    assert_eq!(recorder.particles[23].iter, 5);
 }
