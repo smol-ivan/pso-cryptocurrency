@@ -145,15 +145,15 @@ async fn view_preserves_ticker_order(pool: PgPool) -> Result<(), sqlx::Error> {
 #[ignore]
 async fn results_migration_reverts_and_reapplies(pool: PgPool) -> Result<(), sqlx::Error> {
     let migrator = sqlx::migrate!("./migrations");
-    sqlx::query(
-        "DROP VIEW run_particle_weights;
-         DROP TABLE run_particle_iterations;
-         DROP TABLE run_iterations;
-         DROP TABLE runs;
-         DROP TABLE experiments;",
-    )
-    .execute(&pool)
-    .await?;
+    for statement in [
+        "DROP VIEW run_particle_weights",
+        "DROP TABLE run_particle_iterations",
+        "DROP TABLE run_iterations",
+        "DROP TABLE runs",
+        "DROP TABLE experiments",
+    ] {
+        sqlx::query(statement).execute(&pool).await?;
+    }
     migrator.run(&pool).await?;
     Ok(())
 }
