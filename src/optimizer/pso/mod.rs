@@ -9,7 +9,7 @@ pub use fitness::{FitnessFunction, PenalizedFitness, PenaltyParams, RiskMeasure,
 pub use particle::Particle;
 pub use recorder::{
     IterationRecord, IterationSnapshot, MemoryRecorder, NoopRecorder, ParticleRecord, RunRecorder,
-    Summary,
+    Summary, finite_or_none,
 };
 pub use velocity::{InertiaM, InertiaParams, VelocityModel};
 

@@ -10,6 +10,14 @@ use ndarray::Array1;
 
 use super::particle::Particle;
 
+/// Converts a metric to the database representation convention.
+///
+/// The recorder retains non-finite values as `f64`; persistence can map them
+/// to SQL NULL with this helper.
+pub fn finite_or_none(value: f64) -> Option<f64> {
+    value.is_finite().then_some(value)
+}
+
 /// Read-only view of the swarm at a single iteration.
 ///
 /// The snapshot is taken **after** fitness evaluation and global-best update,
@@ -113,6 +121,9 @@ pub struct IterationRecord {
     pub gbest_fitness: f64,
     pub gbest_return: f64,
     pub gbest_risk: f64,
+    pub gbest_shortfall: f64,
+    pub gbest_penalty: f64,
+    pub gbest_feasible: bool,
     pub gbest_position: Vec<f64>,
     pub gbest_improved: bool,
 
@@ -148,6 +159,7 @@ pub struct ParticleRecord {
     pub expected_return: f64,
     pub risk: f64,
     pub penalty: f64,
+    pub shortfall: f64,
     pub feasible: bool,
     pub pbest_fitness: f64,
 }
@@ -207,6 +219,9 @@ impl RunRecorder for MemoryRecorder {
             gbest_fitness: snap.gbest.best_eval.fitness,
             gbest_return: snap.gbest.best_eval.expected_return,
             gbest_risk: snap.gbest.best_eval.risk,
+            gbest_shortfall: snap.gbest.best_eval.shortfall,
+            gbest_penalty: snap.gbest.best_eval.penalty,
+            gbest_feasible: snap.gbest.best_eval.feasible,
             gbest_position: snap.gbest.best_position.to_vec(),
             gbest_improved: snap.gbest_improved,
             fitness: Summary::of(&finite),
@@ -233,6 +248,7 @@ impl RunRecorder for MemoryRecorder {
                     expected_return: p.eval.expected_return,
                     risk: p.eval.risk,
                     penalty: p.eval.penalty,
+                    shortfall: p.eval.shortfall,
                     feasible: p.eval.feasible,
                     pbest_fitness: p.best_eval.fitness,
                 }));
@@ -311,5 +327,13 @@ mod tests {
     #[test]
     fn summary_of_empty_is_nan() {
         assert!(Summary::of(&[]).mean.is_nan());
+    }
+
+    #[test]
+    fn finite_or_none_maps_only_non_finite_values_to_none() {
+        assert_eq!(finite_or_none(1.5), Some(1.5));
+        assert_eq!(finite_or_none(f64::NAN), None);
+        assert_eq!(finite_or_none(f64::INFINITY), None);
+        assert_eq!(finite_or_none(f64::NEG_INFINITY), None);
     }
 }

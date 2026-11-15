@@ -145,4 +145,54 @@ fn recorder_captures_each_iteration_and_particle() {
     assert_eq!(recorder.iterations[5].iter, 5);
     assert_eq!(recorder.particles[0].iter, 0);
     assert_eq!(recorder.particles[23].iter, 5);
+    assert_eq!(
+        recorder.particles[0].shortfall,
+        (0.02 - recorder.particles[0].expected_return).max(0.0)
+    );
+    let last = recorder.iterations.last().unwrap();
+    assert_eq!(last.gbest_fitness, result.best.best_eval.fitness);
+    assert_eq!(last.gbest_shortfall, result.best.best_eval.shortfall);
+    assert_eq!(last.gbest_penalty, result.best.best_eval.penalty);
+    assert_eq!(last.gbest_feasible, result.best.best_eval.feasible);
+}
+
+#[test]
+fn memory_and_noop_recorders_preserve_the_same_best_fitness() {
+    let returns = array![
+        [0.01, 0.02, -0.01],
+        [0.03, -0.02, 0.04],
+        [-0.01, 0.01, 0.02],
+        [0.02, 0.03, -0.03],
+    ];
+    let make_pso = || {
+        Pso::new(
+            Box::new(PenalizedFitness::new(
+                Box::new(VarianceRisk),
+                PenaltyParams {
+                    penalty: 50.0,
+                    eps: 1e-6,
+                },
+            )),
+            Box::new(InertiaM::new(InertiaParams::default())),
+            3,
+            4,
+            returns.clone(),
+            0.02,
+            6,
+            StdRng::seed_from_u64(7),
+        )
+    };
+
+    let mut memory_pso = make_pso();
+    let mut noop_pso = make_pso();
+    let mut memory = MemoryRecorder::new(true);
+    let mut noop = NoopRecorder;
+
+    let memory_result = memory_pso.optimization(&mut memory).unwrap();
+    let noop_result = noop_pso.optimization(&mut noop).unwrap();
+
+    assert_eq!(
+        memory_result.best.best_eval.fitness,
+        noop_result.best.best_eval.fitness
+    );
 }
