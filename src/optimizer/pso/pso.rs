@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Result, ensure};
 use ndarray::{Array1, Array2};
 use ndarray_rand::RandomExt;
 use ndarray_rand::rand_distr::Uniform;
@@ -161,6 +161,12 @@ impl Pso {
                     .update(particle, &best_global, self.dimensions, &mut self.rng);
             }
         }
+        ensure!(
+            best_global.best_eval.fitness.is_finite(),
+            "global best fitness is not finite after {} iterations",
+            self.iterations
+        );
+
         Ok(RunResult {
             best: best_global,
             iterations_run: self.iterations,

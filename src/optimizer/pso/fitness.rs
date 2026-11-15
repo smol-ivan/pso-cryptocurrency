@@ -41,7 +41,7 @@ pub trait FitnessFunction: Send + Sync {
     fn params(&self) -> serde_json::Value;
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct PenaltyParams {
     pub penalty: f64,

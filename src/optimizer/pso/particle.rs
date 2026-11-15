@@ -39,8 +39,8 @@ impl Particle {
     /// Creates a particle from an initial position and velocity.
     ///
     /// The initial position is also assigned as the particle's
-    /// personal best position. Both fitness values are initialized
-    /// to [`f64::INFINITY`] and must be evaluated afterward.
+    /// personal best position. Both evaluations are initialized with
+    /// [`Evaluation::default`] and must be evaluated afterward.
     ///
     /// # Arguments
     ///

@@ -12,6 +12,29 @@ struct LegacyVariance {
     eps: f64,
 }
 
+struct AlwaysNan;
+
+impl FitnessFunction for AlwaysNan {
+    fn get_fitness(&self, _: &Weights, _: &Array2<f64>, _: f64) -> Evaluation {
+        Evaluation {
+            fitness: f64::NAN,
+            expected_return: f64::NAN,
+            risk: f64::NAN,
+            penalty: f64::NAN,
+            shortfall: f64::NAN,
+            feasible: false,
+        }
+    }
+
+    fn name(&self) -> &'static str {
+        "always_nan"
+    }
+
+    fn params(&self) -> serde_json::Value {
+        serde_json::json!({})
+    }
+}
+
 impl FitnessFunction for LegacyVariance {
     fn get_fitness(
         &self,
@@ -195,4 +218,23 @@ fn memory_and_noop_recorders_preserve_the_same_best_fitness() {
         memory_result.best.best_eval.fitness,
         noop_result.best.best_eval.fitness
     );
+}
+
+#[test]
+fn optimization_rejects_non_finite_global_best() {
+    let mut pso = Pso::new(
+        Box::new(AlwaysNan),
+        Box::new(InertiaM::new(InertiaParams::default())),
+        2,
+        2,
+        array![[0.01, 0.02], [0.03, -0.02]],
+        0.02,
+        3,
+        StdRng::seed_from_u64(7),
+    );
+    let mut recorder = NoopRecorder;
+
+    let error = pso.optimization(&mut recorder).unwrap_err();
+
+    assert!(error.to_string().contains("3 iterations"));
 }
