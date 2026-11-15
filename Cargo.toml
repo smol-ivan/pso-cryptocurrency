@@ -16,8 +16,10 @@ sqlx = { version = "0.8", features = [
     "runtime-tokio",
     "tls-native-tls",
     "postgres",
-    "chrono",
-    "rust_decimal",
+    "migrate",
+    "macros",
+    "json",
+    "time",
 ] }
 anyhow = "1.0.104"
 config = { version = "0.15.27", features = ["toml"] }
