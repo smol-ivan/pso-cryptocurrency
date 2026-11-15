@@ -9,6 +9,7 @@ use crate::optimizer::pso::{FitnessConfig, VelocityConfig};
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
+#[serde(deny_unknown_fields)]
 pub struct DatabaseConfig {
     #[serde(skip_serializing)]
     pub url: String,
@@ -36,6 +37,7 @@ impl fmt::Debug for DatabaseConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DatasetConfig {
     pub tickers: Vec<String>,
     #[serde(with = "time::serde::rfc3339")]
@@ -47,6 +49,7 @@ pub struct DatasetConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PsoConfig {
     pub swarm_size: usize,
     pub iterations: usize,
@@ -58,11 +61,13 @@ pub struct PsoConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SingleTestConfig {
     pub target_return: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Settings {
     #[serde(default)]
     pub database: DatabaseConfig,
@@ -129,6 +134,10 @@ impl Settings {
             "pso.iterations must be at least 1"
         );
         ensure!(
+            i64::try_from(self.pso.seed).is_ok(),
+            "pso.seed must be less than or equal to i64::MAX"
+        );
+        ensure!(
             self.database.max_connections >= 1,
             "database.max_connections must be at least 1"
         );
@@ -157,6 +166,24 @@ impl Settings {
             "single_test.target_return must be finite"
         );
         Ok(())
+    }
+
+    pub fn apply_cli_overrides(
+        &mut self,
+        target_return: Option<f64>,
+        seed: Option<u64>,
+    ) -> Result<()> {
+        if let Some(target_return) = target_return {
+            self.single_test.target_return = target_return;
+        }
+        if let Some(seed) = seed {
+            ensure!(
+                i64::try_from(seed).is_ok(),
+                "CLI --seed must be less than or equal to i64::MAX"
+            );
+            self.pso.seed = seed;
+        }
+        self.validate()
     }
 
     pub fn effective_config_json(&self) -> serde_json::Value {

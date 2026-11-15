@@ -10,10 +10,16 @@ use pso_cryptocurrency::optimizer::pso::{
 
 use support::{FULL_TOML, MINIMAL_TOML, load_toml};
 
+fn clean_environment() -> Environment {
+    Environment::with_prefix("APP")
+        .separator("__")
+        .try_parsing(true)
+}
+
 /// The complete TOML shape maps to the expected values and tagged variants.
 #[test]
 fn deserializes_full_configuration() {
-    let settings = load_toml(FULL_TOML, Environment::default(), Some("postgres://secret")).unwrap();
+    let settings = load_toml(FULL_TOML, clean_environment(), Some("postgres://secret")).unwrap();
 
     assert_eq!(settings.database.max_connections, 5);
     assert_eq!(settings.database.url, "postgres://secret");
@@ -35,7 +41,7 @@ fn deserializes_full_configuration() {
 /// Omitting optional component sections uses each component's documented defaults.
 #[test]
 fn uses_defaults_for_minimal_configuration() {
-    let settings = load_toml(MINIMAL_TOML, Environment::default(), Some("postgres://db")).unwrap();
+    let settings = load_toml(MINIMAL_TOML, clean_environment(), Some("postgres://db")).unwrap();
 
     assert_eq!(settings.database.max_connections, 2);
     assert_eq!(settings.pso.fitness, FitnessConfig::default());
@@ -49,7 +55,7 @@ fn rejects_unknown_kind() {
         "[single_test]",
         "[pso.velocity]\nkind = \"unknown\"\n\n[single_test]",
     );
-    let error = load_toml(&text, Environment::default(), Some("postgres://db")).unwrap_err();
+    let error = load_toml(&text, clean_environment(), Some("postgres://db")).unwrap_err();
 
     assert!(error.to_string().contains("deserialize"));
 }
@@ -76,7 +82,7 @@ fn applies_environment_overrides_without_process_mutation() {
 /// Effective-run JSON excludes database credentials, while Debug redacts them.
 #[test]
 fn effective_json_and_debug_redact_database() {
-    let settings = load_toml(FULL_TOML, Environment::default(), Some("postgres://secret")).unwrap();
+    let settings = load_toml(FULL_TOML, clean_environment(), Some("postgres://secret")).unwrap();
     let json = settings.effective_config_json();
 
     assert!(json.get("database").is_none());
@@ -88,7 +94,35 @@ fn effective_json_and_debug_redact_database() {
 /// Loading a temporary file proves the configured path is not hardcoded to `config.toml`.
 #[test]
 fn loads_a_non_default_path() {
-    assert!(load_toml(MINIMAL_TOML, Environment::default(), Some("postgres://db")).is_ok());
+    assert!(load_toml(MINIMAL_TOML, clean_environment(), Some("postgres://db")).is_ok());
+}
+
+#[test]
+fn example_configuration_loads_with_production_loader() {
+    let settings = load_toml(
+        include_str!("../config.example.toml"),
+        clean_environment(),
+        Some("postgres://db"),
+    )
+    .unwrap();
+    assert_eq!(settings.dataset.periods_per_year, 365.0);
+}
+
+#[test]
+fn rejects_unknown_configuration_fields() {
+    let text = MINIMAL_TOML.replace("[single_test]", "swarm_sise = 99\n\n[single_test]");
+    let error = load_toml(&text, clean_environment(), Some("postgres://db")).unwrap_err();
+    assert!(format!("{error:?}").contains("unknown field"));
+}
+
+#[test]
+fn cli_overrides_are_reflected_in_effective_json() {
+    let mut settings = load_toml(MINIMAL_TOML, clean_environment(), Some("postgres://db")).unwrap();
+    settings.apply_cli_overrides(Some(0.25), Some(123)).unwrap();
+    let json = settings.effective_config_json();
+
+    assert_eq!(json["single_test"]["target_return"], 0.25);
+    assert_eq!(json["pso"]["seed"], 123);
 }
 
 /// Every validation rule has a focused invalid mutation.
@@ -119,14 +153,24 @@ fn validates_all_required_constraints() {
         ("non-finite target", |s| {
             s.single_test.target_return = f64::NAN
         }),
+        ("seed too large", |s| {
+            s.pso.seed = u64::try_from(i64::MAX).unwrap() + 1
+        }),
     ];
 
     for (name, mutate) in cases {
         let mut settings =
-            load_toml(MINIMAL_TOML, Environment::default(), Some("postgres://db")).unwrap();
+            load_toml(MINIMAL_TOML, clean_environment(), Some("postgres://db")).unwrap();
         mutate(&mut settings);
         assert!(settings.validate().is_err(), "{name} should be rejected");
     }
+
+    let mut settings = load_toml(MINIMAL_TOML, clean_environment(), Some("postgres://db")).unwrap();
+    assert!(
+        settings
+            .apply_cli_overrides(None, Some(u64::try_from(i64::MAX).unwrap() + 1))
+            .is_err()
+    );
 }
 
 fn velocity_params_mut(settings: &mut Settings) -> &mut InertiaParams {

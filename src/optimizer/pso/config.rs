@@ -42,6 +42,7 @@ impl VelocityConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
+#[serde(deny_unknown_fields)]
 pub struct FitnessConfig {
     pub penalty: f64,
     pub eps: f64,

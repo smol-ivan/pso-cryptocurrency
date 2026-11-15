@@ -44,6 +44,7 @@ pub trait VelocityModel: Send + Sync {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
+#[serde(deny_unknown_fields)]
 pub struct InertiaParams {
     /// Cognitive acceleration coefficient.
     pub c1: f64,

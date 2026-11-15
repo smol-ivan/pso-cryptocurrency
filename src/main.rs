@@ -16,7 +16,19 @@ use crate::cli::{Cli, Commands};
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Cli::parse();
-    let settings = Settings::new(&args.config)?;
+    let mut settings = Settings::new(&args.config)?;
+    let command = args.command.unwrap_or(Commands::OptimizeSingleTest {
+        target_return: None,
+        seed: None,
+    });
+
+    if let Commands::OptimizeSingleTest {
+        target_return,
+        seed,
+    } = &command
+    {
+        settings.apply_cli_overrides(*target_return, *seed)?;
+    }
 
     // TODO: We need a health check to db
     let pool = PgPoolOptions::new()
@@ -25,10 +37,7 @@ async fn main() -> Result<()> {
         .await
         .context("failed to connect to the database")?;
 
-    match args.command.unwrap_or(Commands::OptimizeSingleTest {
-        target_return: None,
-        seed: None,
-    }) {
+    match command {
         Commands::UpdateDb => {
             println!("Applying database update");
             let assets = download(
@@ -54,8 +63,8 @@ async fn main() -> Result<()> {
         }
 
         Commands::OptimizeSingleTest {
-            target_return,
-            seed,
+            target_return: _,
+            seed: _,
         } => {
             let dataset = build(
                 &pool,
@@ -64,8 +73,8 @@ async fn main() -> Result<()> {
                 settings.dataset.end,
             )
             .await?;
-            let target_return = target_return.unwrap_or(settings.single_test.target_return);
-            let seed = seed.unwrap_or(settings.pso.seed);
+            let target_return = settings.single_test.target_return;
+            let seed = settings.pso.seed;
             let rng = StdRng::seed_from_u64(seed);
 
             let mut recorder = MemoryRecorder::new(true);
