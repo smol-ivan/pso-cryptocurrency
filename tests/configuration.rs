@@ -18,6 +18,7 @@ fn deserializes_full_configuration() {
     assert_eq!(settings.database.max_connections, 5);
     assert_eq!(settings.database.url, "postgres://secret");
     assert_eq!(settings.dataset.tickers, ["AAPL", "NVDA"]);
+    assert_eq!(settings.dataset.periods_per_year, 365.0);
     assert_eq!(settings.pso.swarm_size, 45);
     assert_eq!(settings.pso.fitness.penalty, 75.0);
     assert_eq!(settings.pso.fitness.risk, RiskConfig::Variance);
@@ -98,6 +99,9 @@ fn validates_all_required_constraints() {
         ("empty ticker", |s| s.dataset.tickers[0].clear()),
         ("duplicate ticker", |s| s.dataset.tickers.push("BTC".into())),
         ("invalid dates", |s| s.dataset.end = s.dataset.start),
+        ("invalid periods per year", |s| {
+            s.dataset.periods_per_year = 0.0
+        }),
         ("small swarm", |s| s.pso.swarm_size = 1),
         ("zero iterations", |s| s.pso.iterations = 0),
         ("zero connections", |s| s.database.max_connections = 0),

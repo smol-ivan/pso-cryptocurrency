@@ -5,6 +5,8 @@ max_connections = 2
 tickers = ["AAPL", "NVDA"]
 start = 2024-01-01T00:00:00Z
 end = 2024-01-10T23:59:59Z
+# Cripto cotiza todos los días; para acciones usar aproximadamente 252.
+periods_per_year = 365.0
 
 [pso]
 swarm_size = 50

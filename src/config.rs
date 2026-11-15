@@ -42,6 +42,8 @@ pub struct DatasetConfig {
     pub start: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
     pub end: OffsetDateTime,
+    #[serde(default = "default_periods_per_year")]
+    pub periods_per_year: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -115,6 +117,10 @@ impl Settings {
             "dataset.start must be before dataset.end"
         );
         ensure!(
+            self.dataset.periods_per_year.is_finite() && self.dataset.periods_per_year > 0.0,
+            "dataset.periods_per_year must be finite and greater than zero"
+        );
+        ensure!(
             self.pso.swarm_size >= 2,
             "pso.swarm_size must be at least 2"
         );
@@ -172,4 +178,8 @@ impl PsoConfig {
 
 fn default_max_connections() -> u32 {
     2
+}
+
+fn default_periods_per_year() -> f64 {
+    365.0
 }

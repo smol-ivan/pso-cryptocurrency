@@ -27,6 +27,7 @@ max_connections = 5
 tickers = ["AAPL", "NVDA"]
 start = 2024-01-01T00:00:00Z
 end = 2024-01-10T23:59:59Z
+periods_per_year = 365.0
 
 [pso]
 swarm_size = 45
