@@ -2,6 +2,7 @@ use clap::Parser;
 use ndarray_rand::rand::SeedableRng;
 use ndarray_rand::rand::rngs::StdRng;
 
+use pso_cryptocurrency::build_info::algorithm_version;
 use pso_cryptocurrency::config::Settings;
 use pso_cryptocurrency::market_data::repository::save_assets;
 use pso_cryptocurrency::market_data::{dataset::build, provider::download};
@@ -66,6 +67,11 @@ async fn main() -> Result<()> {
             target_return: _,
             seed: _,
         } => {
+            let version = algorithm_version();
+            println!("Algorithm version: {version}");
+            if version.ends_with(".dirty") {
+                eprintln!("Warning: the working tree is dirty; this run may not be reproducible.");
+            }
             let dataset = build(
                 &pool,
                 &settings.dataset.tickers,
